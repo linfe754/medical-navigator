@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical Navigator</title>
+</head>
+
+<body>
+    <h1>Medical Navigator</h1>
+
+    <p>
+        Ask questions about navigating the Australian healthcare system.
+    </p>
+
+    <p>
+        Medical Navigator provides non-clinical information only.
+        It does not provide diagnosis, treatment, medication advice,
+        or interpretation of symptoms or test results.
+    </p>
+
+    <textarea
+        id="message"
+        rows="5"
+        cols="60"
+        placeholder="e.g. How do I get a referral to see a specialist?"
+    ></textarea>
+
+    <br><br>
+
+    <button onclick="askQuestion()">Ask</button>
+
+    <h3>Response</h3>
+    <div id="response"></div>
+
+    <script>
+        async function askQuestion() {
+            const message = document.getElementById("message").value;
+            const responseDiv = document.getElementById("response");
+
+            if (!message.trim()) {
+                responseDiv.textContent = "Please enter a question.";
+                return;
+            }
+
+            responseDiv.textContent = "Loading...";
+
+            try {
+                const response = await fetch("/chat", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        message: message
+                    })
+                });
+
+                const data = await response.json();
+
+                responseDiv.textContent = data.response;
+            } catch (error) {
+                responseDiv.textContent = "Unable to process your request.";
+            }
+        }
+    </script>
+</body>
+</html>
