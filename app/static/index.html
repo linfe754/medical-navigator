@@ -4,65 +4,322 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Medical Navigator</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f7f9;
+            color: #1f2937;
+        }
+
+        header {
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 24px;
+        }
+
+        .header-content {
+            max-width: 900px;
+            margin: auto;
+        }
+
+        h1 {
+            margin: 0;
+            color: #0f5f73;
+            font-size: 30px;
+        }
+
+        .subtitle {
+            margin-top: 6px;
+            color: #64748b;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+
+        .safety {
+            background: #eef7f8;
+            border-left: 4px solid #0f5f73;
+            padding: 14px 18px;
+            margin-bottom: 25px;
+            border-radius: 6px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .examples {
+            margin-bottom: 25px;
+        }
+
+        .examples p {
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .example-button {
+            background: white;
+            border: 1px solid #cbd5e1;
+            border-radius: 20px;
+            padding: 8px 14px;
+            margin: 4px;
+            cursor: pointer;
+        }
+
+        .example-button:hover {
+            background: #eef7f8;
+        }
+
+        .chat {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            min-height: 280px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            margin-bottom: 18px;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .user {
+            text-align: right;
+        }
+
+        .user span {
+            display: inline-block;
+            background: #0f5f73;
+            color: white;
+            padding: 10px 14px;
+            border-radius: 14px 14px 2px 14px;
+            max-width: 75%;
+            text-align: left;
+        }
+
+        .assistant span {
+            display: inline-block;
+            background: #f1f5f9;
+            padding: 10px 14px;
+            border-radius: 14px 14px 14px 2px;
+            max-width: 85%;
+        }
+
+        .input-area {
+            display: flex;
+            gap: 10px;
+        }
+
+        textarea {
+            flex: 1;
+            resize: vertical;
+            min-height: 60px;
+            padding: 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: inherit;
+        }
+
+        #sendButton {
+            width: 90px;
+            border: none;
+            border-radius: 8px;
+            background: #0f5f73;
+            color: white;
+            font-size: 15px;
+            cursor: pointer;
+        }
+
+        #sendButton:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        footer {
+            text-align: center;
+            color: #64748b;
+            font-size: 13px;
+            margin: 30px 0;
+        }
+
+        @media (max-width: 600px) {
+            .input-area {
+                flex-direction: column;
+            }
+
+            #sendButton {
+                width: 100%;
+                height: 45px;
+            }
+
+            .user span,
+            .assistant span {
+                max-width: 95%;
+            }
+        }
+    </style>
 </head>
 
 <body>
-    <h1>Medical Navigator</h1>
 
-    <p>
-        Ask questions about navigating the Australian healthcare system.
-    </p>
+<header>
+    <div class="header-content">
+        <h1>Medical Navigator</h1>
+        <div class="subtitle">
+            Navigate the Australian healthcare system with confidence
+        </div>
+    </div>
+</header>
 
-    <p>
-        Medical Navigator provides non-clinical information only.
-        It does not provide diagnosis, treatment, medication advice,
-        or interpretation of symptoms or test results.
-    </p>
+<main class="container">
 
-    <textarea
-        id="message"
-        rows="5"
-        cols="60"
-        placeholder="e.g. How do I get a referral to see a specialist?"
-    ></textarea>
+    <div class="safety">
+        <strong>Non-clinical information only.</strong>
+        Medical Navigator helps explain healthcare services, access pathways,
+        Medicare, referrals, appointments, eligibility and related system information.
+        It does not provide diagnosis, treatment, medication advice or interpretation
+        of symptoms or clinical results.
+    </div>
 
-    <br><br>
+    <div class="examples">
+        <p>Try asking:</p>
 
-    <button onclick="askQuestion()">Ask</button>
+        <button class="example-button"
+                onclick="useExample('How do I find a GP in Australia?')">
+            Finding a GP
+        </button>
 
-    <h3>Response</h3>
-    <div id="response"></div>
+        <button class="example-button"
+                onclick="useExample('How do I get a referral to see a specialist?')">
+            Specialist referrals
+        </button>
 
-    <script>
-        async function askQuestion() {
-            const message = document.getElementById("message").value;
-            const responseDiv = document.getElementById("response");
+        <button class="example-button"
+                onclick="useExample('How does Medicare work in Australia?')">
+            Medicare
+        </button>
 
-            if (!message.trim()) {
-                responseDiv.textContent = "Please enter a question.";
-                return;
-            }
+        <button class="example-button"
+                onclick="useExample('What is the difference between public and private hospitals?')">
+            Public vs private
+        </button>
+    </div>
 
-            responseDiv.textContent = "Loading...";
+    <div id="chat" class="chat">
+        <div class="message assistant">
+            <span>
+                Hello. I can help you understand how to navigate the Australian
+                healthcare system. What would you like to know?
+            </span>
+        </div>
+    </div>
 
-            try {
-                const response = await fetch("/chat", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        message: message
-                    })
-                });
+    <div class="input-area">
+        <textarea
+            id="message"
+            placeholder="Ask about Australian healthcare services..."
+        ></textarea>
 
-                const data = await response.json();
+        <button id="sendButton" onclick="askQuestion()">
+            Send
+        </button>
+    </div>
 
-                responseDiv.textContent = data.response;
-            } catch (error) {
-                responseDiv.textContent = "Unable to process your request.";
-            }
+</main>
+
+<footer>
+    Medical Navigator • General healthcare system information only • Not clinical advice
+</footer>
+
+<script>
+    const messageInput = document.getElementById("message");
+    const chat = document.getElementById("chat");
+    const sendButton = document.getElementById("sendButton");
+
+    function useExample(question) {
+        messageInput.value = question;
+        messageInput.focus();
+    }
+
+    function addMessage(text, type) {
+        const message = document.createElement("div");
+        message.className = `message ${type}`;
+
+        const bubble = document.createElement("span");
+        bubble.textContent = text;
+
+        message.appendChild(bubble);
+        chat.appendChild(message);
+
+        chat.scrollTop = chat.scrollHeight;
+
+        return message;
+    }
+
+    async function askQuestion() {
+        const message = messageInput.value.trim();
+
+        if (!message) {
+            return;
         }
-    </script>
+
+        addMessage(message, "user");
+
+        messageInput.value = "";
+        sendButton.disabled = true;
+
+        const loadingMessage = addMessage("Thinking...", "assistant");
+
+        try {
+            const response = await fetch("/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    message: message
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error("Request failed");
+            }
+
+            const data = await response.json();
+
+            loadingMessage.remove();
+            addMessage(data.response, "assistant");
+
+        } catch (error) {
+            loadingMessage.remove();
+
+            addMessage(
+                "Sorry, I couldn't process your request. Please try again.",
+                "assistant"
+            );
+        } finally {
+            sendButton.disabled = false;
+            messageInput.focus();
+        }
+    }
+
+    messageInput.addEventListener("keydown", function(event) {
+        if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            askQuestion();
+        }
+    });
+</script>
+
 </body>
 </html>
