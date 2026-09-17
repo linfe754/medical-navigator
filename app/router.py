@@ -157,7 +157,7 @@ def classify_unknown(message: str, client: OpenAI) -> Intent:
     response = client.responses.create(
         model="gpt-5-nano",
         instructions="""
-Classify the user's message for Medical Navigator, a non-clinical Australian healthcare navigation assistant.
+Classify the user's message by its explicit intent.
 
 Return exactly ONE label:
 
@@ -167,37 +167,62 @@ emergency
 out_of_scope
 clarify
 
-Definitions:
-
 navigation:
-The user clearly wants help accessing or understanding Australian healthcare services, providers, appointments, referrals, Medicare, healthcare costs, or where/how to access healthcare.
+The message explicitly asks about accessing, finding, understanding, or using
+Australian healthcare services or the healthcare system.
+Examples include healthcare providers, GP services, hospitals, pharmacies,
+appointments, referrals, Medicare, healthcare costs, or where/how to access care.
 
 clinical:
-The user asks for diagnosis, symptom interpretation, treatment, medication, test-result interpretation, prognosis, or personalised medical advice.
+The message explicitly asks for diagnosis, interpretation of symptoms,
+treatment, medication, test-result interpretation, prognosis, or personalised
+medical advice.
 
 emergency:
-The user describes immediate danger, a possible medical emergency, or explicitly asks for emergency help.
+The message explicitly describes immediate danger, a possible medical emergency,
+or asks for emergency medical help.
 
 out_of_scope:
-The request is clearly unrelated to Australian healthcare navigation.
+The message has a clear intent that is unrelated to healthcare navigation.
+Examples include weather, jokes, coding, writing, sport, finance, or general knowledge.
 
 clarify:
-The user's request is too vague or ambiguous to determine whether they need Australian healthcare navigation.
-Do not assume that a vague request is medical or healthcare-related.
+The message does not contain enough information to determine its intent.
+Use clarify when the user asks for help but does not say what the help is about.
+
+Critical rules:
+
+- Classify only from information explicitly present in the user's message.
+- Do not infer missing healthcare context.
+- Do not assume the user is asking about healthcare merely because this classifier
+  is used by a healthcare application.
+- If healthcare intent is not explicitly established and there is no clear
+  non-healthcare intent, return clarify.
+- When uncertain between navigation and clarify, return clarify.
+- When uncertain between clinical and navigation, use clinical only when the user
+  is asking for clinical interpretation or advice.
+- Do not answer the user's question.
+- Do not explain the classification.
+- Return only the label.
 
 Examples:
 
 "I don't know where to get help" -> clarify
 "Can you help me?" -> clarify
-"My mum is unwell and I don't know where to take her" -> navigation
-"Where can I go if my GP is closed?" -> navigation
-"What could this headache be?" -> clinical
-"I can't breathe" -> emergency
-"Write me a cover letter" -> out_of_scope
+"Where should I go?" -> clarify
+"I don't know what to do" -> clarify
 
-Do not answer the user's question.
-Do not provide advice.
-Return only the label.
+"My mum is unwell and I don't know where to take her" -> navigation
+"I need to find a doctor" -> navigation
+"Where can I get medical help tonight?" -> navigation
+
+"My head has hurt for three days. What could it be?" -> clinical
+"What medicine should I take?" -> clinical
+
+"I can't breathe and need help now" -> emergency
+
+"Tell me about tomorrow's weather" -> out_of_scope
+"Help me write a cover letter" -> out_of_scope
 """,
         input=message,
     )

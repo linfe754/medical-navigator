@@ -8,7 +8,16 @@ from fastapi.responses import FileResponse
 
 from app.router import Intent, classify_unknown, route_message
 
+import logging
+
 load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+
+logger = logging.getLogger("medical_navigator")
 
 app = FastAPI(title="Medical Navigator")
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -115,12 +124,22 @@ def health():
     return {"status": "healthy"}
 
 
+def log_route(intent: Intent, route_source: str, main_model: bool):
+    logger.info(
+        "intent=%s route=%s main_model=%s",
+        intent.value,
+        route_source,
+        main_model,
+    )
+
 @app.post("/chat")
 def chat(request: ChatRequest):
     intent = route_message(request.message)
+    route_source = "regex"
 
     if intent == Intent.UNKNOWN:
         intent = classify_unknown(request.message, client)
+        route_source = "nano"
         
     if intent == Intent.CLARIFY:
         return {
@@ -131,6 +150,7 @@ def chat(request: ChatRequest):
         }
 
     if intent == Intent.SOCIAL:
+        log_route(intent, route_source, False)
         if any(char in request.message for char in "谢谢謝你好您好再见見拜拜"):
             return {"response": "谢谢！如果你需要了解如何使用澳大利亚的医疗服务，我可以帮助你。"}
         return {
@@ -138,11 +158,13 @@ def chat(request: ChatRequest):
         }
 
     if intent == Intent.OUT_OF_SCOPE:
+        log_route(intent, route_source, False)
         return {
             "response": "I can only help with navigating Australian healthcare services."
         }
 
     if intent == Intent.EMERGENCY:
+        log_route(intent, route_source, False)
         return {
             "response": (
                 "If you are seriously unwell, in immediate danger, or believe this is an emergency, "
@@ -151,6 +173,7 @@ def chat(request: ChatRequest):
         }
 
     if intent == Intent.CLINICAL:
+        log_route(intent, route_source, False)
         return {
             "response": (
                 REFUSAL_MESSAGE
@@ -158,6 +181,8 @@ def chat(request: ChatRequest):
                 "If you believe it is an emergency, call Triple Zero (000)."
             )
         }
+        
+    log_route(intent, route_source, True)
 
     response = client.responses.create(
         model="gpt-5-mini",

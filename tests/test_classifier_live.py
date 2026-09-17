@@ -57,6 +57,17 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
             "我头痛三天了，可能是什么病？",
             Intent.CLINICAL,
         ),
+        ("I really don't know where to get help", Intent.CLARIFY),
+        ("I don't know who can help me", Intent.CLARIFY),
+        ("Can someone please help me?", Intent.CLARIFY),
+        ("I'm lost and need some help", Intent.CLARIFY),
+        ("Where should I go?", Intent.CLARIFY),
+        ("I need some advice", Intent.CLARIFY),
+
+        ("I don't know where to get medical help", Intent.NAVIGATION),
+        ("I need help finding a GP", Intent.NAVIGATION),
+        ("My child is unwell and I don't know where to take him", Intent.NAVIGATION),
+        ("I need somewhere to see a doctor tonight", Intent.NAVIGATION),
     ],
 )
 def test_live_classifier(message, expected):
