@@ -19,3 +19,7 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+    "live: tests that call external APIs and may incur cost",
+]
+addopts = "-m 'not live'"
