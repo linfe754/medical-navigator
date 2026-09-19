@@ -152,6 +152,40 @@
             margin: 30px 0;
         }
 
+        .healthdirect-link {
+            display: block;
+            margin-top: 16px;
+            padding: 10px 14px;
+            background: #0f5f73;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            width: fit-content;
+        }
+
+        .healthdirect-link:hover {
+            opacity: 0.9;
+        }
+
+        .healthdirect-guide-section {
+            margin-top: 28px;
+        }
+
+        .healthdirect-guide-label {
+            margin-bottom: 10px;
+            font-weight: 600;
+            font-size: 16px;
+            color: #1f2937;
+        }
+
+        .healthdirect-guide {
+            display: block;
+            width: 100%;
+            max-width: 750px;
+            height: auto;
+            border-radius: 8px;
+        }
+
         @media (max-width: 600px) {
             .input-area {
                 flex-direction: column;
@@ -167,6 +201,7 @@
                 max-width: 95%;
             }
         }
+        
     </style>
 </head>
 
@@ -251,12 +286,45 @@
         messageInput.focus();
     }
 
-    function addMessage(text, type) {
+    function addMessage(text, type, link = null, images = []) {
         const message = document.createElement("div");
         message.className = `message ${type}`;
 
         const bubble = document.createElement("span");
         bubble.textContent = text;
+
+        if (link) {
+            const linkElement = document.createElement("a");
+            linkElement.href = link;
+            linkElement.target = "_blank";
+            linkElement.rel = "noopener noreferrer";
+            linkElement.textContent = "Open Healthdirect Service Finder";
+            linkElement.className = "healthdirect-link";
+            bubble.appendChild(linkElement);
+        }
+
+        const imageLabels = [
+            "Step 1 — Search for a service",
+            "Step 2 — Refine your results"
+        ];
+
+        images.forEach((src, index) => {
+            const guide = document.createElement("div");
+            guide.className = "healthdirect-guide-section";
+
+            const label = document.createElement("div");
+            label.className = "healthdirect-guide-label";
+            label.textContent = imageLabels[index] || "Healthdirect guide";
+
+            const img = document.createElement("img");
+            img.src = src;
+            img.alt = imageLabels[index] || "Healthdirect Service Finder guide";
+            img.className = "healthdirect-guide";
+
+            guide.appendChild(label);
+            guide.appendChild(img);
+            bubble.appendChild(guide);
+        });
 
         message.appendChild(bubble);
         chat.appendChild(message);
@@ -265,7 +333,6 @@
 
         return message;
     }
-
     async function askQuestion() {
         const message = messageInput.value.trim();
 
@@ -298,7 +365,13 @@
             const data = await response.json();
 
             loadingMessage.remove();
-            addMessage(data.response, "assistant");
+            addMessage(
+                data.response,
+                "assistant",
+                data.link,
+                data.images || []
+            );
+
 
         } catch (error) {
             loadingMessage.remove();

@@ -238,3 +238,32 @@ Examples:
     }
 
     return mapping.get(label, Intent.CLARIFY)
+
+def is_service_finder_request(message: str) -> bool:
+    text = message.lower()
+
+    service_terms = [
+        "gp",
+        "doctor",
+        "pharmacy",
+        "pharmacist",
+        "hospital",
+        "urgent care",
+        "clinic",
+        "health service",
+    ]
+
+    find_terms = [
+        "find",
+        "near me",
+        "nearby",
+        "nearest",
+        "closest",
+        "where",
+        "looking for",
+    ]
+
+    return (
+        any(term in text for term in service_terms)
+        and any(term in text for term in find_terms)
+    )

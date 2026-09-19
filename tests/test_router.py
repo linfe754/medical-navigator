@@ -1,7 +1,6 @@
 import pytest
 
-from app.router import Intent, route_message
-
+from app.router import Intent, route_message, is_service_finder_request
 
 @pytest.mark.parametrize(
     "message,expected",
@@ -36,5 +35,31 @@ from app.router import Intent, route_message
         ("帮帮我", Intent.UNKNOWN),
     ],
 )
+
+
 def test_route_message(message, expected):
     assert route_message(message) == expected
+    
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Find a GP near me",
+        "Where is the nearest pharmacy?",
+        "Find a hospital nearby",
+        "I need to find an urgent care clinic",
+    ],
+)
+def test_service_finder_request(message):
+    assert is_service_finder_request(message)
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "How do I get a Medicare card?",
+        "Do I need a referral to see a specialist?",
+    ],
+)
+def test_not_service_finder_request(message):
+    assert not is_service_finder_request(message)
+    

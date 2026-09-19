@@ -5,8 +5,9 @@ from fastapi import FastAPI
 from openai import OpenAI
 from pydantic import BaseModel
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
-from app.router import Intent, classify_unknown, route_message
+from app.router import Intent, classify_unknown, is_service_finder_request, route_message
 
 import logging
 
@@ -21,6 +22,7 @@ logger = logging.getLogger("medical_navigator")
 
 app = FastAPI(title="Medical Navigator")
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 REFUSAL_MESSAGE = (
     "I can't provide medical advice, diagnose symptoms, recommend treatment or medications, "
@@ -131,7 +133,7 @@ def log_route(intent: Intent, route_source: str, main_model: bool):
         route_source,
         main_model,
     )
-
+    
 @app.post("/chat")
 def chat(request: ChatRequest):
     intent = route_message(request.message)
@@ -180,6 +182,24 @@ def chat(request: ChatRequest):
                 + " If you are unwell, a GP can usually help you decide what care you need. "
                 "If you believe it is an emergency, call Triple Zero (000)."
             )
+        }
+        
+    if intent == Intent.NAVIGATION and is_service_finder_request(request.message):
+        log_route(intent, "service_finder", False)
+
+        return {
+            "response": (
+                "You can use the Healthdirect Service Finder to find healthcare services near you.\n\n"
+                "1. Enter the type of service you need, such as GP, pharmacy, hospital or urgent care.\n"
+                "2. Enter your suburb or postcode.\n"
+                "3. Select Search.\n"
+                "4. Use Filters to narrow the results, for example by opening hours, fees or appointment options."
+            ),
+            "link": "https://www.healthdirect.gov.au/australian-health-services",
+            "images": [
+                "/static/guides/healthdirect_search_en.png",
+                "/static/guides/healthdirect_filter_en.png",
+            ],
         }
         
     log_route(intent, route_source, True)
