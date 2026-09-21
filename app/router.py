@@ -267,3 +267,72 @@ def is_service_finder_request(message: str) -> bool:
         any(term in text for term in service_terms)
         and any(term in text for term in find_terms)
     )
+    
+def is_transport_request(message: str) -> bool:
+    text = message.lower().strip()
+
+    transport_patterns = [
+        r"\bhow do i get to\b",
+        r"\bhow do i get from\b",
+        r"\bhow can i get to\b",
+        r"\bhow to get to\b",
+        r"\bpublic transport\b",
+        r"\bby public transport\b",
+        r"\bby tram\b",
+        r"\bby bus\b",
+        r"\bby train\b",
+        r"\bnearest tram\b",
+        r"\bnearest bus\b",
+        r"\bnearest train\b",
+        r"怎么去",
+        r"如何去",
+        r"公共交通",
+        r"坐电车",
+        r"坐公交",
+        r"坐火车",
+    ]
+
+    return any(
+        re.search(pattern, text)
+        for pattern in transport_patterns
+    )
+    
+    
+def extract_transport_destination(
+    message: str,
+    client: OpenAI,
+) -> str | None:
+    response = client.responses.create(
+        model="gpt-5-nano",
+        instructions=(
+            "Extract only the healthcare facility destination from the user's "
+            "message. Return only the destination text, with no explanation. "
+            "If no healthcare facility destination can be identified, return NONE."
+        ),
+        input=message,
+    )
+
+    destination = response.output_text.strip()
+
+    if not destination or destination.upper() == "NONE":
+        return None
+
+    return destination
+
+def extract_transport_origin(message: str, client: OpenAI) -> str | None:
+    response = client.responses.create(
+        model="gpt-5-nano",
+        instructions=(
+            "Extract only the starting location from the user's public transport "
+            "request. Return only the location text, with no explanation. "
+            "If no starting location is explicitly provided, return NONE."
+        ),
+        input=message,
+    )
+
+    origin = response.output_text.strip()
+
+    if not origin or origin.upper() == "NONE":
+        return None
+
+    return origin

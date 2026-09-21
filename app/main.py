@@ -7,7 +7,19 @@ from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.router import Intent, classify_unknown, is_service_finder_request, route_message
+from app.router import (
+    Intent,
+    classify_unknown,
+    is_service_finder_request,
+    is_transport_request,
+    extract_transport_destination,
+    extract_transport_origin,
+    route_message,
+)
+from app.tools.transport import (
+    get_facility_transport,
+    compute_transit_route,
+)
 
 import logging
 
@@ -23,6 +35,8 @@ logger = logging.getLogger("medical_navigator")
 app = FastAPI(title="Medical Navigator")
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+pending_facilities: dict[str, list[dict]] = {}
 
 REFUSAL_MESSAGE = (
     "I can't provide medical advice, diagnose symptoms, recommend treatment or medications, "
@@ -114,6 +128,7 @@ Your role is to help the user understand what healthcare services exist and how 
 
 class ChatRequest(BaseModel):
     message: str
+    session_id: str
 
 
 @app.get("/")
@@ -134,8 +149,99 @@ def log_route(intent: Intent, route_source: str, main_model: bool):
         main_model,
     )
     
+
+def format_transport_response(result: dict) -> str:
+    facility = result["facility"]
+    transport = result["public_transport"]
+
+    lines = [
+        f"{facility['name']}",
+        f"{facility['address']}",
+        "",
+        "Public transport access:",
+    ]
+
+    for mode in ["tram", "bus", "train"]:
+        item = transport.get(mode)
+
+        if not item:
+            continue
+
+        services = ", ".join(
+            line["name"] for line in item["lines"]
+            if line.get("name")
+        )
+
+        minutes = round(item["walking_duration_seconds"] / 60)
+
+        lines.append(
+            f"{mode.title()}: {item['name']} — {services}. "
+            f"About {item['walking_distance_m']} m walk (~{minutes} min)."
+        )
+
+    return "\n".join(lines)
+
+def format_transit_journey(route: dict, origin: str, facility: dict) -> str:
+    routes = route.get("routes", [])
+
+    if not routes:
+        return "I couldn't find a public transport route for that journey."
+
+    selected_route = routes[0]
+    steps = selected_route["legs"][0]["steps"]
+
+    lines = [
+        f"Public transport from {origin} to {facility['name']}:",
+        ""
+    ]
+
+    number = 1
+
+    for step in steps:
+        transit = step.get("transitDetails")
+
+        if not transit:
+            continue
+
+        transit_line = transit["transitLine"]
+        stops = transit["stopDetails"]
+
+        vehicle = transit_line["vehicle"]["name"]["text"]
+        line_name = transit_line.get("nameShort") or transit_line.get("name")
+
+        departure = stops["departureStop"]["name"]
+        arrival = stops["arrivalStop"]["name"]
+
+        lines.append(f"{number}. {vehicle} — {line_name}")
+        lines.append(f"   {departure} → {arrival}")
+
+        lines.append("")
+        number += 1
+
+    duration_seconds = int(selected_route["duration"].rstrip("s"))
+    duration_minutes = round(duration_seconds / 60)
+
+    lines.append(f"Typical journey time: about {duration_minutes} minutes")
+
+    return "\n".join(lines)
+    
 @app.post("/chat")
 def chat(request: ChatRequest):
+    
+    pending = pending_facilities.get(request.session_id)
+
+    if pending and request.message.strip() in {"1", "2", "3"}:
+        choice = int(request.message.strip()) - 1
+
+        if choice < len(pending):
+            facility = pending[choice]
+            pending_facilities.pop(request.session_id, None)
+
+            result = get_facility_transport(facility["name"])
+
+            if result["status"] == "resolved":
+                return {"response": format_transport_response(result)}
+            
     intent = route_message(request.message)
     route_source = "regex"
 
@@ -183,6 +289,61 @@ def chat(request: ChatRequest):
                 "If you believe it is an emergency, call Triple Zero (000)."
             )
         }
+        
+    if intent == Intent.NAVIGATION and is_transport_request(request.message):
+        destination = extract_transport_destination(request.message, client)
+        origin = extract_transport_origin(request.message, client)
+
+        if not destination:
+            return {"response": "Which healthcare facility do you want to travel to?"}
+
+        result = get_facility_transport(destination)
+
+        if result["status"] == "not_found":
+            return {"response": "I couldn't find that healthcare facility. Please give me the facility name or suburb."}
+
+        if result["status"] == "ambiguous":
+            candidates = []            
+            seen_addresses = set()
+
+            for item in result["candidates"]:
+                address = item.get("address")
+
+                if address in seen_addresses:
+                    continue
+
+                seen_addresses.add(address)
+                candidates.append(item)
+
+                if len(candidates) == 3:
+                    break
+                
+            pending_facilities[request.session_id] = candidates
+            
+            options = "\n".join(
+                f"{i + 1}. {item['name']} — {item['address']}"
+                for i, item in enumerate(candidates)
+            )
+            return {"response": f"I found several possible healthcare facilities. Which one do you mean?\n\n{options}"}
+        
+        if origin:
+            route = compute_transit_route(
+                origin,
+                result["facility"]["address"]
+            )
+
+            log_route(intent, "transport_route_tool", False)
+
+            return {
+                "response": format_transit_journey(
+                    route,
+                    origin,
+                    result["facility"]
+                )
+            }
+
+        log_route(intent, "transport_tool", False)
+        return {"response": format_transport_response(result)}
         
     if intent == Intent.NAVIGATION and is_service_finder_request(request.message):
         log_route(intent, "service_finder", False)

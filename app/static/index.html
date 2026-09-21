@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Medical Navigator</title>
+    <title>Health Service Navigator</title>
 
     <style>
         * {
@@ -201,7 +201,6 @@
                 max-width: 95%;
             }
         }
-        
     </style>
 </head>
 
@@ -209,9 +208,9 @@
 
 <header>
     <div class="header-content">
-        <h1>Medical Navigator</h1>
+        <h1>Health Service Navigator</h1>
         <div class="subtitle">
-            Navigate the Australian healthcare system with confidence
+            Navigate Australian health services with confidence
         </div>
     </div>
 </header>
@@ -220,7 +219,7 @@
 
     <div class="safety">
         <strong>Non-clinical information only.</strong>
-        Medical Navigator helps explain healthcare services, access pathways,
+        Health Service Navigator helps explain healthcare services, access pathways,
         Medicare, referrals, appointments, eligibility and related system information.
         It does not provide diagnosis, treatment, medication advice or interpretation
         of symptoms or clinical results.
@@ -253,8 +252,8 @@
     <div id="chat" class="chat">
         <div class="message assistant">
             <span>
-                Hello. I can help you understand how to navigate the Australian
-                healthcare system. What would you like to know?
+                Hello. I can help you find and understand Australian health services.
+                What would you like help with?
             </span>
         </div>
     </div>
@@ -262,7 +261,7 @@
     <div class="input-area">
         <textarea
             id="message"
-            placeholder="Ask about Australian healthcare services..."
+            placeholder="Ask about Australian health services..."
         ></textarea>
 
         <button id="sendButton" onclick="askQuestion()">
@@ -273,13 +272,14 @@
 </main>
 
 <footer>
-    Medical Navigator • General healthcare system information only • Not clinical advice
+    Health Service Navigator • General healthcare system information only • Not clinical advice
 </footer>
 
 <script>
     const messageInput = document.getElementById("message");
     const chat = document.getElementById("chat");
     const sendButton = document.getElementById("sendButton");
+    const sessionId = crypto.randomUUID();
 
     function useExample(question) {
         messageInput.value = question;
@@ -333,6 +333,7 @@
 
         return message;
     }
+
     async function askQuestion() {
         const message = messageInput.value.trim();
 
@@ -354,7 +355,8 @@
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
-                    message: message
+                    message: message,
+                    session_id: sessionId
                 })
             });
 
@@ -365,13 +367,13 @@
             const data = await response.json();
 
             loadingMessage.remove();
+
             addMessage(
                 data.response,
                 "assistant",
                 data.link,
                 data.images || []
             );
-
 
         } catch (error) {
             loadingMessage.remove();
