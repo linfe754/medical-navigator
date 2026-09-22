@@ -210,7 +210,7 @@
     <div class="header-content">
         <h1>Health Service Navigator</h1>
         <div class="subtitle">
-            Navigate Australian health services with confidence
+            AI-powered navigation for health services in Victoria
         </div>
     </div>
 </header>
@@ -218,42 +218,42 @@
 <main class="container">
 
     <div class="safety">
-        <strong>Non-clinical information only.</strong>
-        Health Service Navigator helps explain healthcare services, access pathways,
-        Medicare, referrals, appointments, eligibility and related system information.
-        It does not provide diagnosis, treatment, medication advice or interpretation
-        of symptoms or clinical results.
+        <strong>Health service navigation only.</strong>
+        Health Service Navigator uses AI to help you understand the healthcare system,
+        find health services in Victoria, and navigate access pathways such as Medicare,
+        referrals and appointments. It does not provide medical advice, diagnosis,
+        treatment, medication advice, or interpretation of symptoms or clinical results.
     </div>
 
     <div class="examples">
         <p>Try asking:</p>
 
         <button class="example-button"
-                onclick="useExample('How do I find a GP in Australia?')">
-            Finding a GP
+                onclick="useExample('Find a GP near Glenroy')">
+            Find a health service
         </button>
 
         <button class="example-button"
-                onclick="useExample('How do I get a referral to see a specialist?')">
-            Specialist referrals
+                onclick="useExample('How do I get to the Royal Children’s Hospital by public transport?')">
+            Plan my journey
         </button>
 
         <button class="example-button"
-                onclick="useExample('How does Medicare work in Australia?')">
-            Medicare
+                onclick="useExample('How do I get a Medicare card?')">
+            Understand Medicare
         </button>
 
         <button class="example-button"
-                onclick="useExample('What is the difference between public and private hospitals?')">
-            Public vs private
+                onclick="useExample('Do I need a referral to see a specialist?')">
+            Understand referrals
         </button>
     </div>
 
     <div id="chat" class="chat">
         <div class="message assistant">
             <span>
-                Hello. I can help you find and understand Australian health services.
-                What would you like help with?
+                Hello. I can help you understand healthcare, find health services in Victoria,
+                and plan how to get there. What would you like help with?
             </span>
         </div>
     </div>
@@ -261,7 +261,7 @@
     <div class="input-area">
         <textarea
             id="message"
-            placeholder="Ask about Australian health services..."
+            placeholder="Ask about health services in Victoria..."
         ></textarea>
 
         <button id="sendButton" onclick="askQuestion()">
@@ -272,7 +272,7 @@
 </main>
 
 <footer>
-    Health Service Navigator • General healthcare system information only • Not clinical advice
+    Health Service Navigator • AI-generated information may contain errors • Verify important information with the relevant health service or official source
 </footer>
 
 <script>
