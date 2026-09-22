@@ -12,7 +12,12 @@ class Intent(str, Enum):
     CLARIFY = "clarify"
     UNKNOWN = "unknown"
 
-
+class Topic(str, Enum):
+    MEDICARE = "medicare"
+    SERVICE_SEARCH = "service_search"
+    TRANSPORT = "transport"
+    HEALTHCARE_NAVIGATION = "healthcare_navigation"
+    
 SOCIAL_PATTERNS = [
     r"^\s*(thanks|thank you|thank you very much|cheers|thx)\s*[!.]*$",
     r"^\s*(谢谢|謝謝|多谢|多謝|感谢|感謝)\s*[！!。.]*$",
@@ -336,3 +341,20 @@ def extract_transport_origin(message: str, client: OpenAI) -> str | None:
         return None
 
     return origin
+
+def detect_topic(message: str) -> Topic | None:
+    text = message.lower().strip()
+
+    if is_transport_request(text):
+        return Topic.TRANSPORT
+
+    if is_service_finder_request(text):
+        return Topic.SERVICE_SEARCH
+
+    if re.search(r"\bmedicare\b|医保|醫保", text):
+        return Topic.MEDICARE
+
+    if matches(text, NAVIGATION_PATTERNS):
+        return Topic.HEALTHCARE_NAVIGATION
+
+    return None

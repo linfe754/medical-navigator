@@ -1,15 +1,18 @@
 import os
+import logging
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from openai import OpenAI
-from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from openai import OpenAI
+from pydantic import BaseModel
 
+from app.memory import memory
 from app.router import (
     Intent,
     classify_unknown,
+    detect_topic,
     is_service_finder_request,
     is_transport_request,
     extract_transport_destination,
@@ -21,7 +24,6 @@ from app.tools.transport import (
     compute_transit_route,
 )
 
-import logging
 
 load_dotenv()
 
@@ -34,15 +36,18 @@ logger = logging.getLogger("medical_navigator")
 
 app = FastAPI(title="Medical Navigator")
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 pending_facilities: dict[str, list[dict]] = {}
+
 
 REFUSAL_MESSAGE = (
     "I can't provide medical advice, diagnose symptoms, recommend treatment or medications, "
     "or interpret test results. I can still help you work out which Australian health service "
     "may be appropriate and how to access it."
 )
+
 
 SYSTEM_INSTRUCTION = """
 You are Medical Navigator, a non-clinical Australian healthcare system navigation assistant.
@@ -104,6 +109,9 @@ Navigation boundary:
 - Only mention Triple Zero (000) when the user's message contains an emergency or immediate-danger signal.
 - For ordinary navigation questions, do not routinely append emergency warnings.
 - Ask only for non-clinical information needed for navigation, such as suburb/postcode, preferred language, service type, opening time, Medicare/bulk-billing needs, or accessibility requirements.
+- Do not generate public transport routes, stops, lines, travel times, or directions from your own knowledge.
+- Public transport directions must only be provided from the transport tool.
+- If transport information is requested but tool results are unavailable, ask the user to clarify the origin or destination instead of generating a route.
 
 Communication:
 
@@ -128,7 +136,7 @@ Your role is to help the user understand what healthcare services exist and how 
 
 class ChatRequest(BaseModel):
     message: str
-    session_id: str
+    session_id: str = "default"
 
 
 @app.get("/")
@@ -148,7 +156,17 @@ def log_route(intent: Intent, route_source: str, main_model: bool):
         route_source,
         main_model,
     )
-    
+
+
+def resolve_topic(session_id: str, message: str) -> str | None:
+    explicit_topic = detect_topic(message)
+
+    if explicit_topic:
+        memory.set_topic(session_id, explicit_topic.value)
+        return explicit_topic.value
+
+    return memory.get_session(session_id).state.current_topic
+
 
 def format_transport_response(result: dict) -> str:
     facility = result["facility"]
@@ -168,7 +186,8 @@ def format_transport_response(result: dict) -> str:
             continue
 
         services = ", ".join(
-            line["name"] for line in item["lines"]
+            line["name"]
+            for line in item["lines"]
             if line.get("name")
         )
 
@@ -181,6 +200,7 @@ def format_transport_response(result: dict) -> str:
 
     return "\n".join(lines)
 
+
 def format_transit_journey(route: dict, origin: str, facility: dict) -> str:
     routes = route.get("routes", [])
 
@@ -192,7 +212,7 @@ def format_transit_journey(route: dict, origin: str, facility: dict) -> str:
 
     lines = [
         f"Public transport from {origin} to {facility['name']}:",
-        ""
+        "",
     ]
 
     number = 1
@@ -214,8 +234,8 @@ def format_transit_journey(route: dict, origin: str, facility: dict) -> str:
 
         lines.append(f"{number}. {vehicle} — {line_name}")
         lines.append(f"   {departure} → {arrival}")
-
         lines.append("")
+
         number += 1
 
     duration_seconds = int(selected_route["duration"].rstrip("s"))
@@ -224,10 +244,15 @@ def format_transit_journey(route: dict, origin: str, facility: dict) -> str:
     lines.append(f"Typical journey time: about {duration_minutes} minutes")
 
     return "\n".join(lines)
-    
+
+
 @app.post("/chat")
 def chat(request: ChatRequest):
-    
+    topic = resolve_topic(
+        request.session_id,
+        request.message,
+    )
+
     pending = pending_facilities.get(request.session_id)
 
     if pending and request.message.strip() in {"1", "2", "3"}:
@@ -240,16 +265,31 @@ def chat(request: ChatRequest):
             result = get_facility_transport(facility["name"])
 
             if result["status"] == "resolved":
-                return {"response": format_transport_response(result)}
-            
+                answer = format_transport_response(result)
+
+                memory.set_selected_service(
+                    request.session_id,
+                    result["facility"]["name"],
+                    result["facility"]["address"],
+                )
+
+                memory.add_turn(
+                    request.session_id,
+                    request.message,
+                    answer,
+                    topic=topic,
+                )
+
+                return {"response": answer}
+
     intent = route_message(request.message)
     route_source = "regex"
 
     if intent == Intent.UNKNOWN:
         intent = classify_unknown(request.message, client)
         route_source = "nano"
-        
-    if intent == Intent.CLARIFY:
+
+    if intent == Intent.CLARIFY and topic is None:
         return {
             "response": (
                 "I can help you understand and access Australian healthcare services. "
@@ -257,22 +297,37 @@ def chat(request: ChatRequest):
             )
         }
 
+    if intent == Intent.CLARIFY and topic is not None:
+        intent = Intent.NAVIGATION
+        route_source = "memory"
+
     if intent == Intent.SOCIAL:
         log_route(intent, route_source, False)
+
         if any(char in request.message for char in "谢谢謝你好您好再见見拜拜"):
-            return {"response": "谢谢！如果你需要了解如何使用澳大利亚的医疗服务，我可以帮助你。"}
+            return {
+                "response": "谢谢！如果你需要了解如何使用澳大利亚的医疗服务，我可以帮助你。"
+            }
+
         return {
-            "response": "You're welcome. I can help if you need to navigate Australian health services."
+            "response": (
+                "You're welcome. I can help if you need to navigate "
+                "Australian health services."
+            )
         }
 
     if intent == Intent.OUT_OF_SCOPE:
         log_route(intent, route_source, False)
+
         return {
-            "response": "I can only help with navigating Australian healthcare services."
+            "response": (
+                "I can only help with navigating Australian healthcare services."
+            )
         }
 
     if intent == Intent.EMERGENCY:
         log_route(intent, route_source, False)
+
         return {
             "response": (
                 "If you are seriously unwell, in immediate danger, or believe this is an emergency, "
@@ -282,6 +337,7 @@ def chat(request: ChatRequest):
 
     if intent == Intent.CLINICAL:
         log_route(intent, route_source, False)
+
         return {
             "response": (
                 REFUSAL_MESSAGE
@@ -289,21 +345,50 @@ def chat(request: ChatRequest):
                 "If you believe it is an emergency, call Triple Zero (000)."
             )
         }
-        
-    if intent == Intent.NAVIGATION and is_transport_request(request.message):
-        destination = extract_transport_destination(request.message, client)
-        origin = extract_transport_origin(request.message, client)
+
+    if (
+            intent == Intent.NAVIGATION
+            and (
+                is_transport_request(request.message)
+                or topic == "transport"
+            )
+        ):
+        destination = extract_transport_destination(
+            request.message,
+            client,
+        )
+
+        origin = extract_transport_origin(
+            request.message,
+            client,
+        )
+
+        selected_service = memory.get_session(
+            request.session_id
+        ).state.selected_service
+
+        if not destination and selected_service:
+            destination = selected_service.name
 
         if not destination:
-            return {"response": "Which healthcare facility do you want to travel to?"}
+            return {
+                "response": (
+                    "Which healthcare facility do you want to travel to?"
+                )
+            }
 
         result = get_facility_transport(destination)
 
         if result["status"] == "not_found":
-            return {"response": "I couldn't find that healthcare facility. Please give me the facility name or suburb."}
+            return {
+                "response": (
+                    "I couldn't find that healthcare facility. "
+                    "Please give me the facility name or suburb."
+                )
+            }
 
         if result["status"] == "ambiguous":
-            candidates = []            
+            candidates = []
             seen_addresses = set()
 
             for item in result["candidates"]:
@@ -317,58 +402,144 @@ def chat(request: ChatRequest):
 
                 if len(candidates) == 3:
                     break
-                
+
             pending_facilities[request.session_id] = candidates
-            
+
             options = "\n".join(
                 f"{i + 1}. {item['name']} — {item['address']}"
                 for i, item in enumerate(candidates)
             )
-            return {"response": f"I found several possible healthcare facilities. Which one do you mean?\n\n{options}"}
-        
-        if origin:
-            route = compute_transit_route(
-                origin,
-                result["facility"]["address"]
-            )
-
-            log_route(intent, "transport_route_tool", False)
 
             return {
-                "response": format_transit_journey(
-                    route,
-                    origin,
-                    result["facility"]
+                "response": (
+                    "I found several possible healthcare facilities. "
+                    f"Which one do you mean?\n\n{options}"
                 )
             }
 
-        log_route(intent, "transport_tool", False)
-        return {"response": format_transport_response(result)}
-        
-    if intent == Intent.NAVIGATION and is_service_finder_request(request.message):
-        log_route(intent, "service_finder", False)
+        memory.set_selected_service(
+            request.session_id,
+            result["facility"]["name"],
+            result["facility"]["address"],
+        )
+
+        if origin:
+            memory.set_location(
+                request.session_id,
+                origin,
+            )
+
+            route = compute_transit_route(
+                origin,
+                result["facility"]["address"],
+            )
+
+            log_route(
+                intent,
+                "transport_route_tool",
+                False,
+            )
+
+            answer = format_transit_journey(
+                route,
+                origin,
+                result["facility"],
+            )
+
+            memory.add_turn(
+                request.session_id,
+                request.message,
+                answer,
+                topic=topic,
+            )
+
+            return {"response": answer}
+
+        log_route(
+            intent,
+            "transport_tool",
+            False,
+        )
+
+        answer = format_transport_response(result)
+
+        memory.add_turn(
+            request.session_id,
+            request.message,
+            answer,
+            topic=topic,
+        )
+
+        return {"response": answer}
+
+    if (
+        intent == Intent.NAVIGATION
+        and is_service_finder_request(request.message)
+    ):
+        log_route(
+            intent,
+            "service_finder",
+            False,
+        )
+
+        answer = (
+            "You can use the Healthdirect Service Finder to find healthcare services near you.\n\n"
+            "1. Enter the type of service you need, such as GP, pharmacy, hospital or urgent care.\n"
+            "2. Enter your suburb or postcode.\n"
+            "3. Select Search.\n"
+            "4. Use Filters to narrow the results, for example by opening hours, fees or appointment options."
+        )
+
+        memory.add_turn(
+            request.session_id,
+            request.message,
+            answer,
+            topic=topic,
+        )
 
         return {
-            "response": (
-                "You can use the Healthdirect Service Finder to find healthcare services near you.\n\n"
-                "1. Enter the type of service you need, such as GP, pharmacy, hospital or urgent care.\n"
-                "2. Enter your suburb or postcode.\n"
-                "3. Select Search.\n"
-                "4. Use Filters to narrow the results, for example by opening hours, fees or appointment options."
-            ),
+            "response": answer,
             "link": "https://www.healthdirect.gov.au/australian-health-services",
             "images": [
                 "/static/guides/healthdirect_search_en.png",
                 "/static/guides/healthdirect_filter_en.png",
             ],
         }
-        
-    log_route(intent, route_source, True)
+
+    log_route(
+        intent,
+        route_source,
+        True,
+    )
+
+    context = memory.get_context(
+        request.session_id,
+        topic=topic,
+    )
+
+    if context:
+        model_input = (
+            "Relevant conversation context:\n"
+            f"{context}\n\n"
+            "Current user message:\n"
+            f"{request.message}"
+        )
+    else:
+        model_input = request.message
 
     response = client.responses.create(
         model="gpt-5-mini",
         instructions=SYSTEM_INSTRUCTION,
-        input=request.message,
+        input=model_input,
     )
 
-    return {"response": response.output_text}
+    answer = response.output_text
+
+    memory.add_turn(
+        request.session_id,
+        request.message,
+        answer,
+        topic=topic,
+    )
+
+    return {"response": answer}

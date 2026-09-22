@@ -63,3 +63,21 @@ def test_service_finder_request(message):
 def test_not_service_finder_request(message):
     assert not is_service_finder_request(message)
     
+    
+from app.router import Topic, detect_topic
+
+
+def test_detect_medicare_topic():
+    assert detect_topic("Am I eligible for Medicare?") == Topic.MEDICARE
+
+
+def test_detect_service_search_topic():
+    assert detect_topic("Find me a GP near Glenroy") == Topic.SERVICE_SEARCH
+
+
+def test_detect_transport_topic():
+    assert detect_topic("How do I get there by train?") == Topic.TRANSPORT
+
+
+def test_followup_has_no_explicit_topic():
+    assert detect_topic("What documents do I need?") is None
