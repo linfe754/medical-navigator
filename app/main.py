@@ -39,6 +39,12 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
+app.mount(
+    "/assets",
+    StaticFiles(directory="frontend/dist/assets"),
+    name="react-assets",
+)
+
 pending_facilities: dict[str, list[dict]] = {}
 
 
@@ -141,8 +147,7 @@ class ChatRequest(BaseModel):
 
 @app.get("/")
 def root():
-    return FileResponse("app/static/index.html")
-
+    return FileResponse("frontend/dist/index.html")
 
 @app.get("/health")
 def health():
