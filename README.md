@@ -1,11 +1,11 @@
 # Find Healthcare
 
-Find Healthcare (Medical Navigator) is a public prototype that helps people understand and access Australian healthcare services. It focuses on practical questions about Medicare, referrals, finding services and getting to a facility, with short answers designed for people who may be unfamiliar with the system or face language or digital access barriers.
+Find Healthcare (Medical Navigator) is a public prototype exploring how a constrained conversational interface can reduce barriers to navigating Australian healthcare services. It helps people understand practical pathways around Medicare, referrals, finding services and getting to a facility, with short answers designed for people who may be unfamiliar with the healthcare system or face language or digital access barriers.
 
 | | |
 | --- | --- |
 | **Live** | [findhealthcare.au](https://findhealthcare.au) |
-| **Purpose** | Accessible navigation of Australian healthcare services |
+| **Purpose** | Reduce barriers to navigating Australian healthcare services |
 | **Built with** | FastAPI · OpenAI · Google Maps Platform · Docker · Azure |
 | **Status** | Public prototype |
 
@@ -15,7 +15,13 @@ This is a healthcare navigation tool. It does not provide diagnosis, treatment o
 
 ## The problem
 
-Australian healthcare information and services are available, but knowing which service to look for, how to access it and where to start can still be difficult. Find Healthcare brings common access questions into a simple conversational interface and links users to an established service finder when they need to search locally.
+Australia has extensive healthcare information and established services such as Healthdirect, Medicare and individual healthcare providers. The problem is not simply a lack of information. Accessing that information often assumes that a person already understands the healthcare system well enough to know what service they need, which organisation to search, what terminology to use and what to do next.
+
+This creates a navigation gap for people who are unfamiliar with the Australian healthcare system, have lower digital literacy, face language barriers, or simply do not know where to start. A conventional website or search engine can provide information once the user knows what to look for, but it does not necessarily help them formulate the right question or navigate the steps between their initial need and an appropriate service.
+
+Find Healthcare explores whether a constrained conversational interface can reduce that gap. Instead of attempting to replace existing healthcare services or provide clinical advice, it helps users express what they are trying to do in everyday language, identifies the relevant non-clinical pathway, explains the next steps and connects them to authoritative services and practical transport information.
+
+The project also treats AI as a component rather than the default solution. Deterministic application logic, established external services and APIs are used where they can answer a request more reliably, while language models are reserved for tasks where natural-language interpretation or explanation provides additional value.
 
 ## What it does
 
@@ -58,9 +64,9 @@ flowchart LR
     A <--> S[In-memory session context]
 ```
 
-The application, rather than the model, selects the service finder and transport paths. For transport requests, `gpt-5-nano` extracts an origin and destination; Python code then calls Google Places and Routes and formats the result. General navigation answers use `gpt-5-mini` through the OpenAI Responses API with a navigation-specific instruction and recent topic context. There is no autonomous agent loop or model-directed function calling in the current implementation.
+The application, rather than the model, selects the service finder and transport paths. For transport requests, `gpt-5-nano` extracts an origin and destination; Python code then calls Google Places and Routes and formats the result. General navigation answers use `gpt-5-mini` through the OpenAI Responses API with a navigation-specific instruction and recent topic context.
 
-This split keeps common greetings, safety responses, service finder guidance and some routing off the main answer model. Unmatched messages and transport extraction can still incur model calls; Google requests can incur separate API costs.
+There is deliberately no autonomous agent loop or model-directed function calling in the current implementation. The system uses deterministic orchestration where the required action can be identified reliably, reserving model reasoning for tasks where natural-language interpretation adds value. This makes behaviour easier to test, reduces unnecessary model and API calls, and improves both cost efficiency and response latency.
 
 ## Technology stack
 
@@ -126,15 +132,22 @@ uv.lock              # Locked dependencies
 
 ## Design decisions
 
-- **Route before generating:** Fixed responses handle recognised safety, social and unrelated intents; the main model is reserved for general navigation answers.
-- **Keep clinical boundaries explicit:** Clinical and emergency requests have dedicated responses, while the navigation prompt forbids diagnosis and symptom-based triage.
-- **Use existing service infrastructure:** The service finder path teaches users how to search Healthdirect rather than presenting unverified listings as first-party results.
-- **Ground travel details externally:** Facility and transport information comes from Google APIs. The app reports routes and nearby stops, but does not provide live departure times or service alerts.
-- **Keep context small:** Topic-filtered memory supports follow-ups, but it is held only in the running process, has no expiry or persistence layer, and is not shared across instances.
+Find Healthcare does not use generative AI for every request. A core design principle is to first decide whether AI is needed at all, then use the smallest appropriate model or deterministic application path for the task.
+
+- **Exclude AI where deterministic logic is sufficient:** Recognised emergency, clinical, social, unrelated and clarification requests use application-controlled responses rather than generative answers. This reduces unnecessary model calls and makes safety-critical behaviour easier to test and reason about.
+- **Route before generating:** Explicit rules handle high-confidence cases first. A small classifier model handles unmatched intent classification, while the larger navigation model is reserved for requests that genuinely require natural-language reasoning or explanation.
+- **Keep safety decisions outside the answer model:** Emergency and clinical boundaries are enforced by routing and fixed responses. The navigation model is not responsible for deciding whether it should provide clinical advice.
+- **Use tools for factual external information:** Facility resolution and public-transport information come from Google Places and Routes APIs. The model can help interpret a request, but application code controls the tool path and formats the returned data.
+- **Use existing healthcare infrastructure:** The service finder path guides users to Healthdirect rather than generating or presenting unverified healthcare-provider listings as first-party results.
+- **Optimise cost and response latency:** Deterministic routes, static responses and smaller models avoid unnecessary token usage and external API calls. This architecture was chosen for operational efficiency as well as safety.
+- **Keep context deliberately small:** Topic-filtered session memory supports follow-up questions without sending an unrestricted conversation history to the model. Current memory is in-process, has no expiry or persistence layer, and is not shared across instances.
+- **Prefer explicit orchestration over unnecessary agent autonomy:** The current workflow is application-controlled rather than an autonomous agent loop. Agentic orchestration or model-directed tool use should only be introduced where it provides a clear capability that deterministic routing cannot provide reliably.
 
 ## Current limitations & roadmap
 
-This is a prototype with partial Chinese coverage, in-process session memory and no live departure times. Intent rules cannot recognise every phrasing, and external API errors do not always produce a friendly response. The application has no rate limiting yet. Next steps include broader bilingual handling, transport tool tests, persistent session management and stronger operational controls.
+This is a prototype with partial Chinese coverage, in-process session memory and no live departure times. Intent rules cannot recognise every phrasing, and external API errors do not always produce a friendly response. The application has no rate limiting yet.
+
+The next development phase will focus on stronger AI engineering rather than frontend complexity: usage and access logging, systematic evaluation, transport tool tests, persistent session management, authoritative healthcare-navigation RAG, and improved observability of latency, model usage and cost. More agentic orchestration, including ReAct or graph-based workflows, will be introduced only where it provides a measurable advantage over the current deterministic routing architecture.
 
 ## Disclaimer
 
