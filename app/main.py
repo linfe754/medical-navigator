@@ -1,8 +1,17 @@
 import os
 import logging
+import time
+import uuid
+import json
+from app.observability.telemetry import (
+    log_route,
+    log_tool,
+    request_id_ctx,
+)
+
+from fastapi import FastAPI, Request
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
@@ -15,13 +24,11 @@ from app.router import (
     detect_topic,
     is_service_finder_request,
     is_transport_request,
-    extract_transport_destination,
-    extract_transport_origin,
     route_message,
 )
-from app.tools.transport import (
-    get_facility_transport,
-    compute_transit_route,
+from app.services.transport_service import (
+    handle_pending_facility_selection,
+    handle_transport_request,
 )
 
 
@@ -34,12 +41,40 @@ logging.basicConfig(
 
 logger = logging.getLogger("medical_navigator")
 
+
 app = FastAPI(title="Medical Navigator")
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    request_id = uuid.uuid4().hex[:12]
+    request_id_ctx.set(request_id)
+    start = time.perf_counter()
 
-pending_facilities: dict[str, list[dict]] = {}
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    except Exception:
+        status_code = 500
+        raise
+    finally:
+        latency_ms = round((time.perf_counter() - start) * 1000)
+
+        logger.info(
+            json.dumps(
+                {
+                    "event": "http_request",
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status": status_code,
+                    "latency_ms": latency_ms,
+                }
+            )
+        )
+
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 
 REFUSAL_MESSAGE = (
@@ -149,15 +184,6 @@ def health():
     return {"status": "healthy"}
 
 
-def log_route(intent: Intent, route_source: str, main_model: bool):
-    logger.info(
-        "intent=%s route=%s main_model=%s",
-        intent.value,
-        route_source,
-        main_model,
-    )
-
-
 def resolve_topic(session_id: str, message: str) -> str | None:
     explicit_topic = detect_topic(message)
 
@@ -168,84 +194,6 @@ def resolve_topic(session_id: str, message: str) -> str | None:
     return memory.get_session(session_id).state.current_topic
 
 
-def format_transport_response(result: dict) -> str:
-    facility = result["facility"]
-    transport = result["public_transport"]
-
-    lines = [
-        f"{facility['name']}",
-        f"{facility['address']}",
-        "",
-        "Public transport access:",
-    ]
-
-    for mode in ["tram", "bus", "train"]:
-        item = transport.get(mode)
-
-        if not item:
-            continue
-
-        services = ", ".join(
-            line["name"]
-            for line in item["lines"]
-            if line.get("name")
-        )
-
-        minutes = round(item["walking_duration_seconds"] / 60)
-
-        lines.append(
-            f"{mode.title()}: {item['name']} — {services}. "
-            f"About {item['walking_distance_m']} m walk (~{minutes} min)."
-        )
-
-    return "\n".join(lines)
-
-
-def format_transit_journey(route: dict, origin: str, facility: dict) -> str:
-    routes = route.get("routes", [])
-
-    if not routes:
-        return "I couldn't find a public transport route for that journey."
-
-    selected_route = routes[0]
-    steps = selected_route["legs"][0]["steps"]
-
-    lines = [
-        f"Public transport from {origin} to {facility['name']}:",
-        "",
-    ]
-
-    number = 1
-
-    for step in steps:
-        transit = step.get("transitDetails")
-
-        if not transit:
-            continue
-
-        transit_line = transit["transitLine"]
-        stops = transit["stopDetails"]
-
-        vehicle = transit_line["vehicle"]["name"]["text"]
-        line_name = transit_line.get("nameShort") or transit_line.get("name")
-
-        departure = stops["departureStop"]["name"]
-        arrival = stops["arrivalStop"]["name"]
-
-        lines.append(f"{number}. {vehicle} — {line_name}")
-        lines.append(f"   {departure} → {arrival}")
-        lines.append("")
-
-        number += 1
-
-    duration_seconds = int(selected_route["duration"].rstrip("s"))
-    duration_minutes = round(duration_seconds / 60)
-
-    lines.append(f"Typical journey time: about {duration_minutes} minutes")
-
-    return "\n".join(lines)
-
-
 @app.post("/chat")
 def chat(request: ChatRequest):
     topic = resolve_topic(
@@ -253,34 +201,13 @@ def chat(request: ChatRequest):
         request.message,
     )
 
-    pending = pending_facilities.get(request.session_id)
+    pending_response = handle_pending_facility_selection(
+        request,
+        topic,
+    )
 
-    if pending and request.message.strip() in {"1", "2", "3"}:
-        choice = int(request.message.strip()) - 1
-
-        if choice < len(pending):
-            facility = pending[choice]
-            pending_facilities.pop(request.session_id, None)
-
-            result = get_facility_transport(facility["name"])
-
-            if result["status"] == "resolved":
-                answer = format_transport_response(result)
-
-                memory.set_selected_service(
-                    request.session_id,
-                    result["facility"]["name"],
-                    result["facility"]["address"],
-                )
-
-                memory.add_turn(
-                    request.session_id,
-                    request.message,
-                    answer,
-                    topic=topic,
-                )
-
-                return {"response": answer}
+    if pending_response is not None:
+        return pending_response
 
     intent = route_message(request.message)
     route_source = "regex"
@@ -302,11 +229,20 @@ def chat(request: ChatRequest):
         route_source = "memory"
 
     if intent == Intent.SOCIAL:
-        log_route(intent, route_source, False)
+        log_route(
+            intent,
+            route_source,
+            False,
+        )
 
-        if any(char in request.message for char in "谢谢謝你好您好再见見拜拜"):
+        if any(
+            char in request.message
+            for char in "谢谢謝你好您好再见見拜拜"
+        ):
             return {
-                "response": "谢谢！如果你需要了解如何使用澳大利亚的医疗服务，我可以帮助你。"
+                "response": (
+                    "谢谢！如果你需要了解如何使用澳大利亚的医疗服务，我可以帮助你。"
+                )
             }
 
         return {
@@ -317,7 +253,11 @@ def chat(request: ChatRequest):
         }
 
     if intent == Intent.OUT_OF_SCOPE:
-        log_route(intent, route_source, False)
+        log_route(
+            intent,
+            route_source,
+            False,
+        )
 
         return {
             "response": (
@@ -326,17 +266,26 @@ def chat(request: ChatRequest):
         }
 
     if intent == Intent.EMERGENCY:
-        log_route(intent, route_source, False)
+        log_route(
+            intent,
+            route_source,
+            False,
+        )
 
         return {
             "response": (
-                "If you are seriously unwell, in immediate danger, or believe this is an emergency, "
+                "If you are seriously unwell, in immediate danger, "
+                "or believe this is an emergency, "
                 "call Triple Zero (000) or go to an emergency department."
             )
         }
 
     if intent == Intent.CLINICAL:
-        log_route(intent, route_source, False)
+        log_route(
+            intent,
+            route_source,
+            False,
+        )
 
         return {
             "response": (
@@ -347,130 +296,18 @@ def chat(request: ChatRequest):
         }
 
     if (
-            intent == Intent.NAVIGATION
-            and (
-                is_transport_request(request.message)
-                or topic == "transport"
-            )
-        ):
-        destination = extract_transport_destination(
-            request.message,
-            client,
+        intent == Intent.NAVIGATION
+        and (
+            is_transport_request(request.message)
+            or topic == "transport"
         )
-
-        origin = extract_transport_origin(
-            request.message,
-            client,
-        )
-
-        selected_service = memory.get_session(
-            request.session_id
-        ).state.selected_service
-
-        if not destination and selected_service:
-            destination = selected_service.name
-
-        if not destination:
-            return {
-                "response": (
-                    "Which healthcare facility do you want to travel to?"
-                )
-            }
-
-        result = get_facility_transport(destination)
-
-        if result["status"] == "not_found":
-            return {
-                "response": (
-                    "I couldn't find that healthcare facility. "
-                    "Please give me the facility name or suburb."
-                )
-            }
-
-        if result["status"] == "ambiguous":
-            candidates = []
-            seen_addresses = set()
-
-            for item in result["candidates"]:
-                address = item.get("address")
-
-                if address in seen_addresses:
-                    continue
-
-                seen_addresses.add(address)
-                candidates.append(item)
-
-                if len(candidates) == 3:
-                    break
-
-            pending_facilities[request.session_id] = candidates
-
-            options = "\n".join(
-                f"{i + 1}. {item['name']} — {item['address']}"
-                for i, item in enumerate(candidates)
-            )
-
-            return {
-                "response": (
-                    "I found several possible healthcare facilities. "
-                    f"Which one do you mean?\n\n{options}"
-                )
-            }
-
-        memory.set_selected_service(
-            request.session_id,
-            result["facility"]["name"],
-            result["facility"]["address"],
-        )
-
-        if origin:
-            memory.set_location(
-                request.session_id,
-                origin,
-            )
-
-            route = compute_transit_route(
-                origin,
-                result["facility"]["address"],
-            )
-
-            log_route(
-                intent,
-                "transport_route_tool",
-                False,
-            )
-
-            answer = format_transit_journey(
-                route,
-                origin,
-                result["facility"],
-            )
-
-            memory.add_turn(
-                request.session_id,
-                request.message,
-                answer,
-                topic=topic,
-            )
-
-            return {"response": answer}
-
-        log_route(
-            intent,
-            "transport_tool",
-            False,
-        )
-
-        answer = format_transport_response(result)
-
-        memory.add_turn(
-            request.session_id,
-            request.message,
-            answer,
+    ):
+        return handle_transport_request(
+            request=request,
+            intent=intent,
             topic=topic,
+            client=client,
         )
-
-        return {"response": answer}
 
     if (
         intent == Intent.NAVIGATION
@@ -527,10 +364,34 @@ def chat(request: ChatRequest):
     else:
         model_input = request.message
 
+    llm_start = time.perf_counter()
+
     response = client.responses.create(
         model="gpt-5-mini",
         instructions=SYSTEM_INSTRUCTION,
         input=model_input,
+    )
+
+    llm_latency_ms = round(
+        (time.perf_counter() - llm_start) * 1000
+    )
+
+    usage = response.usage
+
+    logger.info(
+        json.dumps(
+            {
+                "event": "llm_usage",
+                "request_id": request_id_ctx.get(),
+                "model": "gpt-5-mini",
+                "input_tokens": usage.input_tokens,
+                "cached_tokens": usage.input_tokens_details.cached_tokens,
+                "output_tokens": usage.output_tokens,
+                "reasoning_tokens": usage.output_tokens_details.reasoning_tokens,
+                "total_tokens": usage.total_tokens,
+                "llm_latency_ms": llm_latency_ms,
+            }
+        )
     )
 
     answer = response.output_text

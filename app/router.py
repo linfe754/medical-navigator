@@ -1,6 +1,9 @@
 from enum import Enum
 import re
 from openai import OpenAI
+import time
+
+from app.observability.telemetry import log_llm
 
 
 class Intent(str, Enum):
@@ -159,6 +162,8 @@ def route_message(message: str) -> Intent:
 
 
 def classify_unknown(message: str, client: OpenAI) -> Intent:
+    start = time.perf_counter()
+
     response = client.responses.create(
         model="gpt-5-nano",
         instructions="""
@@ -230,6 +235,15 @@ Examples:
 "Help me write a cover letter" -> out_of_scope
 """,
         input=message,
+    )
+
+    log_llm(
+        operation="classify_unknown",
+        model="gpt-5-nano",
+        latency_ms=round(
+            (time.perf_counter() - start) * 1000
+        ),
+        usage=response.usage,
     )
 
     label = response.output_text.strip().lower()
@@ -307,6 +321,8 @@ def extract_transport_destination(
     message: str,
     client: OpenAI,
 ) -> str | None:
+    start = time.perf_counter()
+
     response = client.responses.create(
         model="gpt-5-nano",
         instructions=(
@@ -317,6 +333,15 @@ def extract_transport_destination(
         input=message,
     )
 
+    log_llm(
+        operation="extract_transport_destination",
+        model="gpt-5-nano",
+        latency_ms=round(
+            (time.perf_counter() - start) * 1000
+        ),
+        usage=response.usage,
+    )
+
     destination = response.output_text.strip()
 
     if not destination or destination.upper() == "NONE":
@@ -324,7 +349,13 @@ def extract_transport_destination(
 
     return destination
 
-def extract_transport_origin(message: str, client: OpenAI) -> str | None:
+
+def extract_transport_origin(
+    message: str,
+    client: OpenAI,
+) -> str | None:
+    start = time.perf_counter()
+
     response = client.responses.create(
         model="gpt-5-nano",
         instructions=(
@@ -333,6 +364,15 @@ def extract_transport_origin(message: str, client: OpenAI) -> str | None:
             "If no starting location is explicitly provided, return NONE."
         ),
         input=message,
+    )
+
+    log_llm(
+        operation="extract_transport_origin",
+        model="gpt-5-nano",
+        latency_ms=round(
+            (time.perf_counter() - start) * 1000
+        ),
+        usage=response.usage,
     )
 
     origin = response.output_text.strip()
@@ -358,3 +398,4 @@ def detect_topic(message: str) -> Topic | None:
         return Topic.HEALTHCARE_NAVIGATION
 
     return None
+
