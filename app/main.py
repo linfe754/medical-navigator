@@ -4,8 +4,8 @@ import time
 import uuid
 import json
 from app.observability.telemetry import (
+    log_llm,
     log_route,
-    log_tool,
     request_id_ctx,
 )
 
@@ -376,22 +376,11 @@ def chat(request: ChatRequest):
         (time.perf_counter() - llm_start) * 1000
     )
 
-    usage = response.usage
-
-    logger.info(
-        json.dumps(
-            {
-                "event": "llm_usage",
-                "request_id": request_id_ctx.get(),
-                "model": "gpt-5-mini",
-                "input_tokens": usage.input_tokens,
-                "cached_tokens": usage.input_tokens_details.cached_tokens,
-                "output_tokens": usage.output_tokens,
-                "reasoning_tokens": usage.output_tokens_details.reasoning_tokens,
-                "total_tokens": usage.total_tokens,
-                "llm_latency_ms": llm_latency_ms,
-            }
-        )
+    log_llm(
+        operation="navigation_response",
+        model="gpt-5-mini",
+        latency_ms=llm_latency_ms,
+        usage=response.usage,
     )
 
     answer = response.output_text
