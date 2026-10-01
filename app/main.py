@@ -6,13 +6,14 @@ import json
 from app.observability.telemetry import (
     log_llm,
     log_route,
+    log_stream,
     request_id_ctx,
 )
 
 from fastapi import FastAPI, Request
 
 from dotenv import load_dotenv
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
 from pydantic import BaseModel
@@ -393,3 +394,121 @@ def chat(request: ChatRequest):
     )
 
     return {"response": answer}
+
+
+@app.post("/chat/stream")
+def chat_stream(request: ChatRequest):
+    topic = resolve_topic(
+        request.session_id,
+        request.message,
+    )
+
+    intent = route_message(request.message)
+    route_source = "regex"
+
+    if intent == Intent.UNKNOWN:
+        intent = classify_unknown(request.message, client)
+        route_source = "nano"
+
+    if intent == Intent.CLARIFY and topic is not None:
+        intent = Intent.NAVIGATION
+        route_source = "memory"
+
+    if intent != Intent.NAVIGATION:
+        return chat(request)
+
+    if (
+        is_transport_request(request.message)
+        or topic == "transport"
+        or is_service_finder_request(request.message)
+    ):
+        return chat(request)
+
+    log_route(
+        intent,
+        route_source,
+        True,
+    )
+
+    context = memory.get_context(
+        request.session_id,
+        topic=topic,
+    )
+
+    if context:
+        model_input = (
+            "Relevant conversation context:\n"
+            f"{context}\n\n"
+            "Current user message:\n"
+            f"{request.message}"
+        )
+    else:
+        model_input = request.message
+
+        def generate():
+            full_response = ""
+            stream_start = time.perf_counter()
+            ttft_ms = None
+
+            try:
+                with client.responses.stream(
+                    model="gpt-5-mini",
+                    instructions=SYSTEM_INSTRUCTION,
+                    input=model_input,
+                ) as stream:
+                    for event in stream:
+                        if event.type == "response.output_text.delta":
+                            if ttft_ms is None:
+                                ttft_ms = round(
+                                    (time.perf_counter() - stream_start) * 1000
+                                )
+
+                            full_response += event.delta
+                            yield event.delta
+
+                    final_response = stream.get_final_response()
+
+                stream_latency_ms = round(
+                    (time.perf_counter() - stream_start) * 1000
+                )
+
+                log_stream(
+                    operation="navigation_response",
+                    model="gpt-5-mini",
+                    ttft_ms=ttft_ms,
+                    stream_latency_ms=stream_latency_ms,
+                )
+                
+                log_llm(
+                    operation="navigation_response_stream",
+                    model="gpt-5-mini",
+                    latency_ms=stream_latency_ms,
+                    usage=final_response.usage,
+                )
+
+                memory.add_turn(
+                    request.session_id,
+                    request.message,
+                    full_response,
+                    topic=topic,
+                )
+
+            except Exception:
+                stream_latency_ms = round(
+                    (time.perf_counter() - stream_start) * 1000
+                )
+
+                log_stream(
+                    operation="navigation_response",
+                    model="gpt-5-mini",
+                    ttft_ms=ttft_ms,
+                    stream_latency_ms=stream_latency_ms,
+                    status="error",
+                )
+
+                raise
+
+        return StreamingResponse(
+            generate(),
+            media_type="text/plain",
+        )

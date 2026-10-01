@@ -73,4 +73,25 @@ def log_llm(
         )
     )
     
+def log_stream(
+    operation: str,
+    model: str,
+    ttft_ms: int | None,
+    stream_latency_ms: int,
+    status: str = "success",
+):
+    logger.info(
+        json.dumps(
+            {
+                "event": "llm_stream",
+                "request_id": request_id_ctx.get(),
+                "operation": operation,
+                "model": model,
+                "status": status,
+                "ttft_ms": ttft_ms,
+                "stream_latency_ms": stream_latency_ms,
+            }
+        )
+    )
+    
        

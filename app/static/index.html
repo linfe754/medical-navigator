@@ -349,7 +349,7 @@
         const loadingMessage = addMessage("Thinking...", "assistant");
 
         try {
-            const response = await fetch("/chat", {
+            const response = await fetch("/chat/stream", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -364,16 +364,53 @@
                 throw new Error("Request failed");
             }
 
-            const data = await response.json();
+            const contentType = response.headers.get("content-type") || "";
 
-            loadingMessage.remove();
+            if (contentType.includes("application/json")) {
+                const data = await response.json();
 
-            addMessage(
-                data.response,
-                "assistant",
-                data.link,
-                data.images || []
-            );
+                loadingMessage.remove();
+
+                addMessage(
+                    data.response,
+                    "assistant",
+                    data.link,
+                    data.images || []
+                );
+
+                return;
+            }
+
+            if (!response.body) {
+                throw new Error("Streaming not supported");
+            }
+
+            const bubble = loadingMessage.querySelector("span");
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            let answer = "";
+            let firstChunk = true;
+
+            while (true) {
+                const { value, done } = await reader.read();
+
+                if (done) {
+                    break;
+                }
+
+                const chunk = decoder.decode(value, { stream: true });
+
+                if (firstChunk) {
+                    bubble.textContent = "";
+                    firstChunk = false;
+                }
+
+                answer += chunk;
+                bubble.textContent = answer;
+
+                chat.scrollTop = chat.scrollHeight;
+            }
 
         } catch (error) {
             loadingMessage.remove();
@@ -389,7 +426,12 @@
     }
 
     messageInput.addEventListener("keydown", function(event) {
-        if (event.key === "Enter" && !event.shiftKey) {
+        if (
+            event.key === "Enter" &&
+            !event.shiftKey &&
+            !event.isComposing &&
+            !sendButton.disabled
+        ) {
             event.preventDefault();
             askQuestion();
         }
