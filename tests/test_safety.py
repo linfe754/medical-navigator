@@ -43,6 +43,12 @@ def test_vague_request_is_clarified(monkeypatch):
 
     monkeypatch.setattr(
         main,
+        "get_openai_client",
+        lambda: None,
+    )
+
+    monkeypatch.setattr(
+        main,
         "classify_unknown",
         lambda message, client: main.Intent.CLARIFY,
     )
