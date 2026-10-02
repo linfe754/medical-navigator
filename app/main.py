@@ -44,7 +44,15 @@ logger = logging.getLogger("medical_navigator")
 
 
 app = FastAPI(title="Medical Navigator")
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = None
+
+def get_openai_client():
+    global client
+
+    if client is None:
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+    return client
 
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next):
@@ -214,7 +222,7 @@ def chat(request: ChatRequest):
     route_source = "regex"
 
     if intent == Intent.UNKNOWN:
-        intent = classify_unknown(request.message, client)
+        intent = classify_unknown(request.message, get_openai_client())
         route_source = "nano"
 
     if intent == Intent.CLARIFY and topic is None:
@@ -307,7 +315,7 @@ def chat(request: ChatRequest):
             request=request,
             intent=intent,
             topic=topic,
-            client=client,
+            client=get_openai_client(),
         )
 
     if (
@@ -367,7 +375,7 @@ def chat(request: ChatRequest):
 
     llm_start = time.perf_counter()
 
-    response = client.responses.create(
+    response = get_openai_client().responses.create(
         model="gpt-5-mini",
         instructions=SYSTEM_INSTRUCTION,
         input=model_input,
@@ -407,7 +415,7 @@ def chat_stream(request: ChatRequest):
     route_source = "regex"
 
     if intent == Intent.UNKNOWN:
-        intent = classify_unknown(request.message, client)
+        intent = classify_unknown(request.message, get_openai_client())
         route_source = "nano"
 
     if intent == Intent.CLARIFY and topic is not None:
@@ -451,7 +459,7 @@ def chat_stream(request: ChatRequest):
             ttft_ms = None
 
             try:
-                with client.responses.stream(
+                with get_openai_client().responses.stream(
                     model="gpt-5-mini",
                     instructions=SYSTEM_INSTRUCTION,
                     input=model_input,

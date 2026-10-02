@@ -11,7 +11,7 @@ load_dotenv()
 
 pytestmark = pytest.mark.live
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = None
 
 
 @pytest.mark.parametrize(
@@ -70,5 +70,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         ("I need somewhere to see a doctor tonight", Intent.NAVIGATION),
     ],
 )
+
 def test_live_classifier(message, expected):
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     assert classify_unknown(message, client) == expected
