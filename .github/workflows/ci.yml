@@ -42,3 +42,14 @@ jobs:
 
       - name: Verify Azure login
         run: az account show --output table
+
+      - name: Login to ACR
+        run: az acr login --name medicalnavigator754
+
+      - name: Build and push Docker image
+        run: |
+          docker build \
+            -t medicalnavigator754.azurecr.io/medical-navigator:${{ github.sha }} \
+            .
+          docker push \
+            medicalnavigator754.azurecr.io/medical-navigator:${{ github.sha }}
