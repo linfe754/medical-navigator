@@ -21,11 +21,10 @@ from pydantic import BaseModel
 from app.memory import memory
 from app.router import (
     Intent,
-    classify_unknown,
+    classify_intent,
     detect_topic,
     is_service_finder_request,
     is_transport_request,
-    route_message,
 )
 from app.services.transport_service import (
     handle_pending_facility_selection,
@@ -218,12 +217,10 @@ def chat(request: ChatRequest):
     if pending_response is not None:
         return pending_response
 
-    intent = route_message(request.message)
-    route_source = "regex"
-
-    if intent == Intent.UNKNOWN:
-        intent = classify_unknown(request.message, get_openai_client())
-        route_source = "nano"
+    intent, route_source = classify_intent(
+        request.message,
+        get_openai_client(),
+    )
 
     if intent == Intent.CLARIFY and topic is None:
         return {
@@ -244,13 +241,62 @@ def chat(request: ChatRequest):
             False,
         )
 
+        message = request.message.strip().lower()
+        is_chinese = any(
+            "\u4e00" <= char <= "\u9fff"
+            for char in message
+        )
+
         if any(
-            char in request.message
-            for char in "谢谢謝你好您好再见見拜拜"
+            phrase in message
+            for phrase in [
+                "good morning",
+                "good afternoon",
+                "good evening",
+                "hello",
+                "hey",
+                "hi",
+                "你好",
+                "您好",
+                "嗨",
+                "早上好",
+                "下午好",
+                "晚上好",
+            ]
         ):
+            if is_chinese:
+                return {
+                    "response": (
+                        "你好！我可以帮助你查找和使用澳大利亚的医疗服务。"
+                    )
+                }
+
             return {
                 "response": (
-                    "谢谢！如果你需要了解如何使用澳大利亚的医疗服务，我可以帮助你。"
+                    "Hello! I can help you navigate Australian health services."
+                )
+            }
+
+        if any(
+            phrase in message
+            for phrase in [
+                "goodbye",
+                "bye",
+                "see you",
+                "再见",
+                "再見",
+                "拜拜",
+            ]
+        ):
+            if is_chinese:
+                return {"response": "再见！"}
+
+            return {"response": "Goodbye!"}
+
+        if is_chinese:
+            return {
+                "response": (
+                    "不客气！如果你需要了解如何使用澳大利亚的医疗服务，我可以继续帮助你。"
                 )
             }
 
@@ -411,12 +457,10 @@ def chat_stream(request: ChatRequest):
         request.message,
     )
 
-    intent = route_message(request.message)
-    route_source = "regex"
-
-    if intent == Intent.UNKNOWN:
-        intent = classify_unknown(request.message, get_openai_client())
-        route_source = "nano"
+    intent, route_source = classify_intent(
+        request.message,
+        get_openai_client(),
+    )
 
     if intent == Intent.CLARIFY and topic is not None:
         intent = Intent.NAVIGATION

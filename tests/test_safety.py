@@ -49,8 +49,8 @@ def test_vague_request_is_clarified(monkeypatch):
 
     monkeypatch.setattr(
         main,
-        "classify_unknown",
-        lambda message, client: main.Intent.CLARIFY,
+        "classify_intent",
+        lambda message, client: (main.Intent.CLARIFY, "nano"),
     )
 
     response = ask("I don't know where to get help")

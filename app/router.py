@@ -22,31 +22,54 @@ class Topic(str, Enum):
     HEALTHCARE_NAVIGATION = "healthcare_navigation"
     
 SOCIAL_PATTERNS = [
-    r"^\s*(thanks|thank you|thank you very much|cheers|thx)\s*[!.]*$",
-    r"^\s*(谢谢|謝謝|多谢|多謝|感谢|感謝)\s*[！!。.]*$",
-    r"^\s*(hi|hello|hey)\s*[!.]*$",
-    r"^\s*(你好|您好|嗨)\s*[！!。.]*$",
-    r"^\s*(bye|goodbye|see you)\s*[!.]*$",
+    r"^\s*(hi|hello|hey|good morning|good afternoon|good evening)\s*[!.]*$",
+    r"^\s*(你好|您好|嗨|早上好|下午好|晚上好)\s*[！!。.]*$",
+
+    r"^\s*(thanks|thank you|thank you very much|many thanks|cheers|thx)(?:,\s*)?(?:that helped|that was helpful|for your help|so much)?\s*[!.]*$",
+    r"^\s*(谢谢|謝謝|多谢|多謝|感谢|感謝)(?:你)?(?:，|,)?(?:帮了大忙|幫了大忙|非常有帮助|非常有幫助)?\s*[！!。.]*$",
+
+    r"^\s*(bye|goodbye|bye for now|see you|see you later)\s*[!.]*$",
     r"^\s*(再见|再見|拜拜)\s*[！!。.]*$",
+    r"^\s*(thanks|thank you|cheers).*?(that's all|that is all|nothing else|no more questions|all i needed).*?[!.]*$",
+    r"^\s*(谢谢|謝謝).*?(没有别的问题|沒有別的問題|没别的问题|沒別的問題|就这些|就這些).*?[！!。.]*$",
+    r"^\s*(cheers|thanks|thank you)(?:,\s*)?(?:thanks|thank you)?(?:\s+for\s+(?:your|the)\s+help)?\s*[!.]*$",
 ]
 
 
 EMERGENCY_PATTERNS = [
     r"\bcall\s*000\b",
-    r"\bemergency\b",
     r"\bambulance\b",
     r"\bcan't breathe\b",
     r"\bcannot breathe\b",
     r"\bnot breathing\b",
+    r"\bstruggl(?:e|ing)\s+to\s+breathe\b",
+    r"\bdifficulty breathing\b",
+    r"\bshortness of breath\b",
     r"\bunconscious\b",
     r"\bsevere chest pain\b",
+    r"\bcrushing chest pain\b",
+    r"\boverdose\b",
+    r"\btook too many (?:pills|tablets|medications|medicines|drugs)\b",
+    r"\bswallowed too many (?:pills|tablets|medications|medicines|drugs)\b",
+    r"\bwant to (?:kill|hurt) myself\b",
+    r"\btrying to (?:kill|hurt) myself\b",
+    r"\btried to (?:kill|hurt) myself\b",
+    r"\bsuicidal\b",
     r"无法呼吸",
     r"不能呼吸",
+    r"呼吸.*困难",
+    r"呼吸.*困難",
     r"昏迷",
     r"叫救护车",
     r"叫救護車",
     r"严重.*胸痛",
     r"嚴重.*胸痛",
+    r"剧烈.*胸痛",
+    r"劇烈.*胸痛",
+    r"舌头.*肿.*呼吸困难",
+    r"舌頭.*腫.*呼吸困難",
+    r"吞了很多药.*结束生命",
+    r"吞了很多藥.*結束生命",
 ]
 
 
@@ -58,9 +81,14 @@ CLINICAL_PATTERNS = [
     r"\bwhat medication\b",
     r"\bwhat medicine\b",
     r"\bwhat should i take\b",
+    r"\bwhich medication\b",
+    r"\bwhich medicine\b",
+    r"\bwhich antibiotic\b",
+    r"\bshould i take.*(?:medicine|medication|antibiotic)\b",
     r"\bdosage\b",
     r"\bdose\b",
     r"\binterpret.*(test|result|scan|blood)\b",
+    r"\bwhich (?:type|kind) of (?:doctor|specialist) should i see for\b",
     r"什么病",
     r"什麼病",
     r"怎么治疗",
@@ -69,6 +97,9 @@ CLINICAL_PATTERNS = [
     r"吃什麼藥",
     r"用什么药",
     r"用什麼藥",
+    r"要吃.*药",
+    r"要吃.*藥",
+    r"抗生素",
     r"药量",
     r"藥量",
     r"剂量",
@@ -77,7 +108,6 @@ CLINICAL_PATTERNS = [
     r"檢查結果",
 ]
 
-
 OUT_OF_SCOPE_PATTERNS = [
     r"\btell me (a )?joke\b",
     r"\bweather\b",
@@ -85,8 +115,12 @@ OUT_OF_SCOPE_PATTERNS = [
     r"\bfootball\b",
     r"\bsoccer\b",
     r"\bstock (price|market)\b",
+    r"\b(?:stock|share|shares)\b.*\b(?:buy|sell|invest|investment)\b",
+    r"\b(?:buy|sell|invest|investment)\b.*\b(?:stock|share|shares)\b",
     r"\bbitcoin\b",
     r"\bwrite (me )?(a )?(poem|story)\b",
+    r"\b(?:write|draft|prepare|help me write).*\b(?:cover letter|resume|cv|job application)\b",
+    r"\b(?:cover letter|resume|cv|job application)\b",
     r"讲.*笑话",
     r"講.*笑話",
     r"天气",
@@ -95,8 +129,9 @@ OUT_OF_SCOPE_PATTERNS = [
     r"股票",
     r"比特币",
     r"比特幣",
+    r"(?:写|寫|帮我写|幫我寫).*(?:求职信|求職信|简历|簡歷|申请信|申請信)",
+    r"(?:求职信|求職信|简历|簡歷|申请信|申請信)",
 ]
-
 
 NAVIGATION_PATTERNS = [
     r"\bmedicare\b",
@@ -167,7 +202,7 @@ def classify_unknown(message: str, client: OpenAI) -> Intent:
     response = client.responses.create(
         model="gpt-5-nano",
         instructions="""
-Classify the user's message by its explicit intent.
+Classify the user's message according to the Medical Navigator product boundary.
 
 Return exactly ONE label:
 
@@ -177,62 +212,228 @@ emergency
 out_of_scope
 clarify
 
-navigation:
-The message explicitly asks about accessing, finding, understanding, or using
-Australian healthcare services or the healthcare system.
-Examples include healthcare providers, GP services, hospitals, pharmacies,
-appointments, referrals, Medicare, healthcare costs, or where/how to access care.
+Do not answer the user's question.
+Do not explain your reasoning.
+Return only the label.
 
-clinical:
-The message explicitly asks for diagnosis, interpretation of symptoms,
-treatment, medication, test-result interpretation, prognosis, or personalised
-medical advice.
+
+INTENT DEFINITIONS
 
 emergency:
-The message explicitly describes immediate danger, a possible medical emergency,
-or asks for emergency medical help.
+The message contains signs of an immediate or potentially life-threatening
+medical emergency, immediate danger, or an urgent request for emergency help.
+
+Emergency signals include, but are not limited to:
+- inability to breathe or severe difficulty breathing
+- severe or crushing chest pain
+- loss of consciousness
+- possible stroke signs, such as sudden facial drooping, sudden speech
+  difficulty, or sudden one-sided weakness
+- severe allergic reaction affecting breathing
+- serious overdose or poisoning
+- self-harm or suicidal actions indicating immediate danger
+
+An emergency signal takes priority over every other intent, even when the user
+also asks about transport, hospitals, medication, or another healthcare service.
+
+
+clinical:
+The message asks for clinical judgement or personalised medical guidance.
+
+This includes:
+- diagnosis or possible diagnosis
+- interpretation of symptoms
+- deciding what a symptom or condition means
+- treatment advice
+- medication or dosage advice
+- interpretation of tests, scans, blood results, or other clinical results
+- prognosis
+- deciding which type of doctor, specialist, department, or medical service
+  is appropriate based on symptoms or a health condition
+
+Choosing an appropriate type of care based on symptoms requires clinical
+assessment and must therefore be classified as clinical.
+
+
+navigation:
+The message asks how to access, find, understand, or use Australian healthcare
+services or the healthcare system without requiring clinical judgement.
+
+This includes:
+- finding a known type of healthcare provider or service
+- finding a GP, hospital, pharmacy, specialist, or other healthcare facility
+- directions or public transport to a healthcare service
+- appointments and referrals
+- Medicare
+- healthcare costs or eligibility
+- administrative information about accessing care
+
+If the user already knows the provider, service, specialty, or facility they
+want and asks where to find it, how to access it, or how to get there, classify
+as navigation.
+
+A user may mention an illness or symptom as context without making the request
+clinical. Classify according to what the user is asking for, unless an emergency
+signal is present.
+
 
 out_of_scope:
-The message has a clear intent that is unrelated to healthcare navigation.
-Examples include weather, jokes, coding, writing, sport, finance, or general knowledge.
+The message has a clear intent unrelated to healthcare navigation or the
+Medical Navigator product.
+
+Examples include:
+- weather
+- jokes
+- coding
+- writing tasks
+- employment applications
+- sport
+- investing or finance
+- unrelated general knowledge
+
+The presence of a healthcare word, hospital name, doctor name, or medical
+organisation does not by itself make a request navigation.
+
+For example, asking for investment advice about a hospital company or asking
+for help writing a hospital job application is out_of_scope.
+
 
 clarify:
-The message does not contain enough information to determine its intent.
-Use clarify when the user asks for help but does not say what the help is about.
+The user's intended task cannot be determined from the message.
 
-Critical rules:
+Use clarify when:
+- the user asks for help but does not say what kind of help
+- the message refers to missing prior context, such as "there", "that place",
+  "it", or "them", and the current message alone does not establish what the
+  reference means
+- the message is too ambiguous to establish healthcare navigation, clinical,
+  emergency, or a clear non-healthcare intent
+- the message is meaningless or insufficient to determine an intent
 
-- Classify only from information explicitly present in the user's message.
-- Do not infer missing healthcare context.
-- Do not assume the user is asking about healthcare merely because this classifier
-  is used by a healthcare application.
-- If healthcare intent is not explicitly established and there is no clear
-  non-healthcare intent, return clarify.
-- When uncertain between navigation and clarify, return clarify.
-- When uncertain between clinical and navigation, use clinical only when the user
-  is asking for clinical interpretation or advice.
+Do not use clarify merely because information required to complete a known
+navigation task is missing.
+
+For example:
+"Give me directions to the hospital, but I haven't chosen which hospital."
+is navigation, not clarify. The navigation task is clear even though a required
+destination is missing.
+
+
+DECISION PRIORITY
+
+Apply these rules in order:
+
+1. If an emergency signal is present, return emergency.
+2. Otherwise, if the request requires clinical judgement, return clinical.
+3. Otherwise, if the request is clearly about healthcare access or navigation,
+   return navigation.
+4. Otherwise, if a clear non-healthcare task is present, return out_of_scope.
+5. Otherwise, return clarify.
+
+
+CRITICAL RULES
+
+- Classify only from information present in the user's message.
+- Do not invent or infer missing healthcare context.
+- Do not assume healthcare intent merely because this classifier belongs to a
+  healthcare application.
+- Classify the user's requested task, not merely keywords appearing in the text.
+- Historical or contextual mentions do not override the user's current task.
+- A healthcare-related noun alone does not establish navigation intent.
+- Emergency safety signals override the requested task.
 - Do not answer the user's question.
+- Do not provide medical advice.
 - Do not explain the classification.
-- Return only the label.
+- Return exactly one label and nothing else.
 
-Examples:
 
-"I don't know where to get help" -> clarify
-"Can you help me?" -> clarify
-"Where should I go?" -> clarify
-"I don't know what to do" -> clarify
+BOUNDARY EXAMPLES
 
-"My mum is unwell and I don't know where to take her" -> navigation
-"I need to find a doctor" -> navigation
-"Where can I get medical help tonight?" -> navigation
+"I can't breathe and need help now"
+-> emergency
 
-"My head has hurt for three days. What could it be?" -> clinical
-"What medicine should I take?" -> clinical
+"I have crushing chest pain. What tram goes to Royal Melbourne Hospital?"
+-> emergency
 
-"I can't breathe and need help now" -> emergency
+"My dad suddenly has facial drooping and slurred speech."
+-> emergency
 
-"Tell me about tomorrow's weather" -> out_of_scope
-"Help me write a cover letter" -> out_of_scope
+"我爸突然嘴歪了，说话也不清楚。"
+-> emergency
+
+"孩子呼吸很困难，怎么去医院？"
+-> emergency
+
+"I took too many tablets and want to find a clinic."
+-> emergency
+
+
+"My head has hurt for three days. What could it be?"
+-> clinical
+
+"What medicine should I take?"
+-> clinical
+
+"Which type of doctor should I see for recurring headaches?"
+-> clinical
+
+"经常头疼应该看哪个科？"
+-> clinical
+
+
+"Find a neurologist near me."
+-> navigation
+
+"帮我找附近的神经科。"
+-> navigation
+
+"I need to find a doctor."
+-> navigation
+
+"Where can I get medical help tonight?"
+-> navigation
+
+"My mum is unwell and I need directions to Royal Melbourne Hospital."
+-> navigation
+
+"I was discharged from emergency yesterday. How do I get back to the hospital
+for my follow-up appointment?"
+-> navigation
+
+"Give me directions to the hospital. I haven't chosen which hospital yet."
+-> navigation
+
+
+"Which hospital company shares should I buy?"
+-> out_of_scope
+
+"Write a cover letter for a receptionist job at Royal Melbourne Hospital."
+-> out_of_scope
+
+"Tell me about tomorrow's weather."
+-> out_of_scope
+
+"Help me write a cover letter."
+-> out_of_scope
+
+
+"I don't know where to get help."
+-> clarify
+
+"Can you help me?"
+-> clarify
+
+"Where should I go?"
+-> clarify
+
+"I don't know what to do."
+-> clarify
+
+"asdf qwer zxcv"
+-> clarify
+
+"Can you help me get there?"
+-> clarify
 """,
         input=message,
     )
@@ -257,6 +458,17 @@ Examples:
     }
 
     return mapping.get(label, Intent.CLARIFY)
+
+def classify_intent(
+    message: str,
+    client: OpenAI,
+) -> tuple[Intent, str]:
+    intent = route_message(message)
+
+    if intent != Intent.UNKNOWN:
+        return intent, "regex"
+
+    return classify_unknown(message, client), "nano"
 
 def is_service_finder_request(message: str) -> bool:
     text = message.lower()
