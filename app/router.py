@@ -4,7 +4,7 @@ from openai import OpenAI
 import time
 
 from app.observability.telemetry import log_llm
-
+from collections.abc import Callable
 
 class Intent(str, Enum):
     NAVIGATION = "navigation"
@@ -461,14 +461,17 @@ for my follow-up appointment?"
 
 def classify_intent(
     message: str,
-    client: OpenAI,
+    client_factory: Callable[[], OpenAI],
 ) -> tuple[Intent, str]:
     intent = route_message(message)
 
     if intent != Intent.UNKNOWN:
         return intent, "regex"
 
-    return classify_unknown(message, client), "nano"
+    return classify_unknown(
+        message,
+        client_factory(),
+    ), "nano"
 
 def is_service_finder_request(message: str) -> bool:
     text = message.lower()

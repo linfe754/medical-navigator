@@ -219,7 +219,7 @@ def chat(request: ChatRequest):
 
     intent, route_source = classify_intent(
         request.message,
-        get_openai_client(),
+        get_openai_client,
     )
 
     if intent == Intent.CLARIFY and topic is None:
@@ -459,7 +459,7 @@ def chat_stream(request: ChatRequest):
 
     intent, route_source = classify_intent(
         request.message,
-        get_openai_client(),
+        get_openai_client,
     )
 
     if intent == Intent.CLARIFY and topic is not None:
