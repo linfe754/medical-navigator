@@ -32,6 +32,8 @@ Users can ask questions such as “How do I get a Medicare card?”, “Do I nee
 - Resolve a named facility with Google Places, show nearby tram, bus and train access with estimated walking distance, and request a Google Routes transit journey when an origin is supplied. Ambiguous facility names prompt a choice.
 - Respond to English and Chinese input in the model-led navigation path. Rule-based responses and the interface are primarily in English, so language coverage is partial.
 
+General navigation answers can stream into the chat as they are generated. Fixed responses, the Healthdirect guide and transport results return as complete JSON responses. Streaming is still being hardened for follow-up questions with existing context.
+
 The browser uses a session ID for follow-up questions. The server keeps the current topic, selected facility and up to six recent turns per session in process memory.
 
 ## Safety and scope
@@ -52,7 +54,7 @@ The model instruction also prohibits clinical triage, symptom-based service reco
 
 ```mermaid
 flowchart LR
-    U[Browser UI] --> A[FastAPI /chat]
+    U[Browser UI] --> A[FastAPI chat endpoints]
     A --> R[Intent and topic routing]
     R --> F[Fixed safety, social or clarification response]
     R --> H[Healthdirect link and illustrated guide]
@@ -81,7 +83,29 @@ flowchart LR
     A --> C[findhealthcare.au custom domain]
 ```
 
-The repository's `Dockerfile` builds a Python 3.12 image, installs locked production dependencies with `uv`, copies the app and starts Uvicorn on port 8000. `GET /` serves the page, `POST /chat` handles requests and `GET /health` provides a health endpoint. The [deployment summary](docs/deployment.md) records the production architecture without infrastructure identifiers or secrets.
+The repository's `Dockerfile` builds a Python 3.12 image, installs locked production dependencies with `uv`, copies the app and starts Uvicorn on port 8000. `GET /` serves the page, `POST /chat` handles complete responses, `POST /chat/stream` streams general navigation answers with JSON fallback for dedicated paths, and `GET /health` provides a health endpoint. The [deployment summary](docs/deployment.md) records the production architecture without infrastructure identifiers or secrets.
+
+### CI/CD
+
+[GitHub Actions](.github/workflows/ci.yml) runs on pushes and pull requests targeting `main`. It installs Python 3.12 and locked dependencies with `uv`, runs the default test suite and validates the Docker build.
+
+After those checks pass on a push to `main`, the same workflow authenticates to Azure through OIDC, pushes a Docker image tagged with the commit SHA to Azure Container Registry, and updates Azure Container Apps. Pull requests run validation only. Azure authentication uses federated identity rather than a stored client secret; the workflow reads the client, tenant and subscription IDs from GitHub repository variables.
+
+## Observability
+
+Structured JSON logs correlate events through a request ID:
+
+| Event | Recorded fields |
+| --- | --- |
+| HTTP request | Method, path, status and middleware latency |
+| Routing | Intent, route source and whether the main answer model is used |
+| Tool usage | Tool name, latency and status |
+| Model usage | Operation, model, latency, input/output tokens, cached tokens and reasoning tokens |
+| Streaming | Time to first text delta, stream duration and status |
+
+Telemetry is centralised in [`app/observability/telemetry.py`](app/observability/telemetry.py). Transport orchestration is separated into [`app/services/transport_service.py`](app/services/transport_service.py), which records tool timing and status.
+
+These logs support investigation of response delays, model usage and cost efficiency. They do not yet provide a cost dashboard or complete event coverage. HTTP middleware timing does not measure the full duration of a streamed response; separate stream events record that duration. The defined telemetry fields do not include message text or client IP addresses.
 
 ## Running locally
 
@@ -110,24 +134,48 @@ docker run --env-file .env -p 8000:8000 find-healthcare
 
 ```bash
 uv run pytest
-uv run pytest -m live  # calls external APIs; requires credentials and may incur cost
+uv run pytest -m live
 ```
 
-The default suite excludes `live` tests. Local tests cover intent and topic routing, service finder detection, session memory and fixed safety responses. Marked live tests exercise classifier decisions and model-generated navigation answers. There are currently no automated tests for the Google transport tools or deployment configuration.
+The default suite excludes `live` tests. Live tests require API credentials and may incur cost. OpenAI clients are initialised lazily, allowing the application to be imported and deterministic tests to run without an API key. Local tests cover intent and topic routing, service finder detection, session memory and fixed safety responses. Marked live tests exercise classifier decisions and model-generated navigation answers. There are currently no automated tests for the Google transport tools or deployment configuration.
+
+### Routing evaluation
+
+A separate [routing evaluation dataset](evals/datasets/routing.jsonl) contains 100 labelled cases: 60 English and 40 Chinese. Cases cover straightforward, boundary and adversarial inputs, with severity labels for safety analysis.
+
+```bash
+uv run python -m evals.evaluators.routing
+```
+
+This command requires an OpenAI API key and may call the classifier model. It produces console metrics and timestamped JSON reports in `evals/reports/`, including:
+
+- Overall accuracy and per-intent precision, recall, F1 and support.
+- Accuracy by language, difficulty and route source, plus a confusion matrix.
+- Emergency and clinical recall, false negatives and the critical-case pass rate.
+- The proportion of evaluation cases handled by regex without classifier calls, and details of failed cases.
+
+The current evaluator checks intent classification only. Although the case schema includes tool and response expectations, these are not yet evaluated. The LLM avoidance metric describes classifier routing on this dataset; it does not measure all downstream model calls or production cost savings. Evaluation runs are currently separate from CI.
 
 ## Project structure
 
 ```text
 app/
-  main.py            # FastAPI endpoints and response orchestration
-  router.py          # Intent, topic and transport request detection
-  memory.py          # Per-session, in-process conversation state
-  tools/transport.py # Google Places and Routes requests
-  static/            # Browser UI and Healthdirect guide images
-tests/               # Routing, memory, safety and marked live tests
-Dockerfile           # Production container image
-pyproject.toml       # Dependencies and test configuration
-uv.lock              # Locked dependencies
+  main.py
+  router.py
+  memory.py
+  observability/telemetry.py
+  services/transport_service.py
+  tools/transport.py
+  static/
+evals/
+  datasets/routing.jsonl
+  schemas/eval_case.py
+  evaluators/routing.py
+tests/
+.github/workflows/ci.yml
+Dockerfile
+pyproject.toml
+uv.lock
 ```
 
 ## Design decisions
@@ -147,7 +195,7 @@ Find Healthcare does not use generative AI for every request. A core design prin
 
 This is a prototype with partial Chinese coverage, in-process session memory and no live departure times. Intent rules cannot recognise every phrasing, and external API errors do not always produce a friendly response. The application has no rate limiting yet.
 
-The next development phase will focus on stronger AI engineering rather than frontend complexity: usage and access logging, systematic evaluation, transport tool tests, persistent session management, authoritative healthcare-navigation RAG, and improved observability of latency, model usage and cost. More agentic orchestration, including ReAct or graph-based workflows, will be introduced only where it provides a measurable advantage over the current deterministic routing architecture.
+Structured telemetry, an initial routing evaluation framework, streaming responses and automated deployment are now implemented. Remaining work includes fixing and testing streaming follow-ups with existing context, expanding evaluation to response safety and tool behaviour, adding transport tool tests, improving telemetry coverage and cost reporting, persistent session management, and authoritative healthcare-navigation RAG. More agentic orchestration, including ReAct or graph-based workflows, will be introduced only where it provides a measurable advantage over the current deterministic routing architecture.
 
 ## Disclaimer
 
