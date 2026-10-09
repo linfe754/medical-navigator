@@ -32,7 +32,7 @@ Users can ask questions such as “How do I get a Medicare card?”, “Do I nee
 - Resolve a named facility with Google Places, show nearby tram, bus and train access with estimated walking distance, and request a Google Routes transit journey when an origin is supplied. Ambiguous facility names prompt a choice.
 - Respond to English and Chinese input in the model-led navigation path. Rule-based responses and the interface are primarily in English, so language coverage is partial.
 
-General navigation answers can stream into the chat as they are generated. Fixed responses, the Healthdirect guide and transport results return as complete JSON responses. Streaming is still being hardened for follow-up questions with existing context.
+General navigation answers can stream into the chat as they are generated. Fixed responses, the Healthdirect guide and transport results return as complete JSON responses. Model-led streaming follow-ups with existing context are currently unsupported; the streaming generator is only defined and returned for requests without context.
 
 The browser uses a session ID for follow-up questions. The server keeps the current topic, selected facility and up to six recent turns per session in process memory.
 
@@ -68,7 +68,7 @@ flowchart LR
 
 The application, rather than the model, selects the service finder and transport paths. For transport requests, `gpt-5-nano` extracts an origin and destination; Python code then calls Google Places and Routes and formats the result. General navigation answers use `gpt-5-mini` through the OpenAI Responses API with a navigation-specific instruction and recent topic context.
 
-There is deliberately no autonomous agent loop or model-directed function calling in the current implementation. The system uses deterministic orchestration where the required action can be identified reliably, reserving model reasoning for tasks where natural-language interpretation adds value. This makes behaviour easier to test, reduces unnecessary model and API calls, and improves both cost efficiency and response latency.
+There is deliberately no autonomous agent loop or model-directed function calling in the current implementation. The system uses deterministic orchestration where the required action can be identified reliably, reserving model reasoning for tasks where natural-language interpretation adds value. This makes behaviour easier to test and is intended to reduce unnecessary model/API usage and response latency; production savings and latency improvements have not been benchmarked.
 
 ## Technology stack
 
@@ -83,7 +83,7 @@ flowchart LR
     A --> C[findhealthcare.au custom domain]
 ```
 
-The repository's `Dockerfile` builds a Python 3.12 image, installs locked production dependencies with `uv`, copies the app and starts Uvicorn on port 8000. `GET /` serves the page, `POST /chat` handles complete responses, `POST /chat/stream` streams general navigation answers with JSON fallback for dedicated paths, and `GET /health` provides a health endpoint. The [deployment summary](docs/deployment.md) records the production architecture without infrastructure identifiers or secrets.
+The repository's `Dockerfile` builds a Python 3.12 image, installs locked production dependencies with `uv`, copies the app and starts Uvicorn on port 8000. `GET /` serves the page, `POST /chat` handles complete responses, `POST /chat/stream` streams general navigation answers with JSON fallback for dedicated paths, and `GET /health` reports application availability without checking external API dependencies. The [deployment summary](docs/deployment.md) records the production architecture without infrastructure identifiers or secrets.
 
 ### CI/CD
 
@@ -106,6 +106,10 @@ Structured JSON logs correlate events through a request ID:
 Telemetry is centralised in [`app/observability/telemetry.py`](app/observability/telemetry.py). Transport orchestration is separated into [`app/services/transport_service.py`](app/services/transport_service.py), which records tool timing and status.
 
 These logs support investigation of response delays, model usage and cost efficiency. They do not yet provide a cost dashboard or complete event coverage. HTTP middleware timing does not measure the full duration of a streamed response; separate stream events record that duration. The defined telemetry fields do not include message text or client IP addresses.
+
+## Security and data handling
+
+Model requests send user messages and, where applicable, relevant conversation context to OpenAI. Transport requests send facility and location information to Google Maps Platform. Session IDs are supplied by the client and are not authenticated; session memory is held in process without expiry. The application has no rate limiting. These are prototype boundaries rather than a complete production security or privacy design.
 
 ## Running locally
 
@@ -139,7 +143,9 @@ uv run pytest -m live
 
 The default suite excludes `live` tests. Live tests require API credentials and may incur cost. OpenAI clients are initialised lazily, allowing the application to be imported and deterministic tests to run without an API key. Local tests cover intent and topic routing, service finder detection, session memory and fixed safety responses. Marked live tests exercise classifier decisions and model-generated navigation answers. There are currently no automated tests for the Google transport tools or deployment configuration.
 
-### Routing evaluation
+### Evaluation
+
+#### Routing
 
 A separate [routing evaluation dataset](evals/datasets/routing.jsonl) contains 100 labelled cases: 60 English and 40 Chinese. Cases cover straightforward, boundary and adversarial inputs, with severity labels for safety analysis.
 
@@ -154,7 +160,20 @@ This command requires an OpenAI API key and may call the classifier model. It pr
 - Emergency and clinical recall, false negatives and the critical-case pass rate.
 - The proportion of evaluation cases handled by regex without classifier calls, and details of failed cases.
 
-The current evaluator checks intent classification only. Although the case schema includes tool and response expectations, these are not yet evaluated. The LLM avoidance metric describes classifier routing on this dataset; it does not measure all downstream model calls or production cost savings. Evaluation runs are currently separate from CI.
+The routing evaluator checks intent classification only. Although the case schema includes tool and response expectations, these are not yet evaluated. The LLM avoidance metric describes classifier routing on this dataset; it does not measure all downstream model calls or production cost savings. Evaluation runs are currently separate from CI.
+
+#### Response safety and product contracts
+
+The [safety dataset](evals/datasets/safety.jsonl) contains 31 cases and the [product-contract dataset](evals/datasets/product_contract.jsonl) contains 12 cases, both covering English and Chinese inputs.
+
+```bash
+uv run python -m evals.evaluators.safety
+uv run python -m evals.evaluators.product
+```
+
+Both evaluators exercise the application response path and can invoke OpenAI and, for transport requests, Google APIs. Configure the relevant credentials; runs may incur cost. Results are printed to the console rather than saved as reports.
+
+The safety evaluator checks required and forbidden text plus patterns for clinical follow-up questions. It does not semantically assess every prohibited behaviour listed in the case schema or establish clinical safety. The product evaluator adds a basic language check and returns `PASS`, `FAIL` or `REVIEW`; GP-first and clarification cases without automated violations require manual review. An automated `PASS` means only that the implemented checks passed, not that the response is fully correct or the user task succeeded. Formal end-to-end task-success measurement is not yet implemented.
 
 ## Project structure
 
@@ -169,8 +188,12 @@ app/
   static/
 evals/
   datasets/routing.jsonl
+  datasets/safety.jsonl
+  datasets/product_contract.jsonl
   schemas/eval_case.py
   evaluators/routing.py
+  evaluators/safety.py
+  evaluators/product.py
 tests/
 .github/workflows/ci.yml
 Dockerfile
@@ -195,7 +218,7 @@ Find Healthcare does not use generative AI for every request. A core design prin
 
 This is a prototype with partial Chinese coverage, in-process session memory and no live departure times. Intent rules cannot recognise every phrasing, and external API errors do not always produce a friendly response. The application has no rate limiting yet.
 
-Structured telemetry, an initial routing evaluation framework, streaming responses and automated deployment are now implemented. Remaining work includes fixing and testing streaming follow-ups with existing context, expanding evaluation to response safety and tool behaviour, adding transport tool tests, improving telemetry coverage and cost reporting, persistent session management, and authoritative healthcare-navigation RAG. More agentic orchestration, including ReAct or graph-based workflows, will be introduced only where it provides a measurable advantage over the current deterministic routing architecture.
+Structured telemetry, routing, response-safety and product-contract evaluators, initial streaming responses and automated deployment are now implemented. Remaining work includes fixing and testing streaming follow-ups with existing context, expanding semantic response-safety evaluation and tool-behaviour checks, adding transport tool tests, improving telemetry coverage and cost reporting, persistent session management, and authoritative healthcare-navigation RAG. More agentic orchestration, including ReAct or graph-based workflows, will be introduced only where it provides a measurable advantage over the current deterministic routing architecture.
 
 ## Disclaimer
 
