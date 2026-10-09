@@ -8,4 +8,4 @@ Docker image → Azure Container Registry → Azure Container Apps → findhealt
 
 The application runs as a container in Azure Container Apps. Its image is stored in Azure Container Registry. The `Dockerfile` in this repository defines the image: Python 3.12, locked production dependencies installed with `uv`, and Uvicorn serving FastAPI on port 8000.
 
-The repository does not include Azure resource definitions or a deployment workflow. The application exposes `/health` for an HTTP health check.
+The repository does not include Azure resource definitions; the [GitHub Actions workflow](../.github/workflows/ci.yml) validates tests and the Docker build, then deploys pushes to `main` to Azure Container Apps. The application exposes `/health` for an HTTP health check.
