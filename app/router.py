@@ -70,6 +70,8 @@ EMERGENCY_PATTERNS = [
     r"舌頭.*腫.*呼吸困難",
     r"吞了很多药.*结束生命",
     r"吞了很多藥.*結束生命",
+    r"(?:胸口|胸部|胸前).*(?:剧痛|劇痛|严重疼痛|嚴重疼痛)",
+    r"(?:剧痛|劇痛|严重疼痛|嚴重疼痛).*(?:胸口|胸部|胸前)",
 ]
 
 
@@ -88,7 +90,6 @@ CLINICAL_PATTERNS = [
     r"\bdosage\b",
     r"\bdose\b",
     r"\binterpret.*(test|result|scan|blood)\b",
-    r"\bwhich (?:type|kind) of (?:doctor|specialist) should i see for\b",
     r"什么病",
     r"什麼病",
     r"怎么治疗",
@@ -236,7 +237,6 @@ Emergency signals include, but are not limited to:
 An emergency signal takes priority over every other intent, even when the user
 also asks about transport, hospitals, medication, or another healthcare service.
 
-
 clinical:
 The message asks for clinical judgement or personalised medical guidance.
 
@@ -248,11 +248,16 @@ This includes:
 - medication or dosage advice
 - interpretation of tests, scans, blood results, or other clinical results
 - prognosis
-- deciding which type of doctor, specialist, department, or medical service
-  is appropriate based on symptoms or a health condition
 
-Choosing an appropriate type of care based on symptoms requires clinical
-assessment and must therefore be classified as clinical.
+Asking what kind of doctor or healthcare service to see is navigation,
+provided there are no emergency signals.
+
+For these requests, the assistant may use the safe navigation pathway of
+starting with a GP, who can assess the problem and determine whether specialist
+care or a referral is needed.
+
+The assistant must not infer from the user's symptoms that a particular
+specialist, diagnosis, treatment, or medication is appropriate.
 
 
 navigation:
@@ -375,10 +380,10 @@ BOUNDARY EXAMPLES
 -> clinical
 
 "Which type of doctor should I see for recurring headaches?"
--> clinical
+-> navigation
 
 "经常头疼应该看哪个科？"
--> clinical
+-> navigation
 
 
 "Find a neurologist near me."

@@ -75,7 +75,7 @@ def load_cases(path: str) -> list[EvalCase]:
 def evaluate_case(case: EvalCase) -> dict:
     intent, source = classify_intent(
         case.input,
-        get_openai_client(),
+        get_openai_client,
     )
 
     actual = intent.value
