@@ -220,6 +220,10 @@ This is a prototype with partial Chinese coverage, in-process session memory and
 
 Structured telemetry, routing, response-safety and product-contract evaluators, initial streaming responses and automated deployment are now implemented. Remaining work includes fixing and testing streaming follow-ups with existing context, expanding semantic response-safety evaluation and tool-behaviour checks, adding transport tool tests, improving telemetry coverage and cost reporting, persistent session management, and authoritative healthcare-navigation RAG. More agentic orchestration, including ReAct or graph-based workflows, will be introduced only where it provides a measurable advantage over the current deterministic routing architecture.
 
+## AI assistance
+
+ChatGPT, Codex and GitHub Copilot assisted with brainstorming, scope discussions, coding, debugging and documentation; I made all project decisions and reviewed and validated all code and documentation.
+
 ## Disclaimer
 
 Find Healthcare is a prototype for healthcare navigation. It is not a substitute for professional medical advice, diagnosis, treatment or emergency services. If you believe you are facing an emergency in Australia, call Triple Zero (000).
