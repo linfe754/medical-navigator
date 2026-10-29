@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "bulk-billing-choice-en",
+      "question": "Does every GP bulk bill every appointment?",
+      "expected_source_ids": [
+        "bulk-billing-en",
+        "bulk-billing-easy-read-en"
+      ],
+      "required_evidence": "The provider decides whether to bulk bill; patients should check before attending."
+    },
+    {
+      "id": "bulk-billing-consent-en",
+      "question": "What do I need to agree to when my GP bulk bills?",
+      "expected_source_ids": [
+        "bulk-billing-en",
+        "bulk-billing-easy-read-en"
+      ],
+      "required_evidence": "Consent to assigning the Medicare benefit to the provider."
+    },
+    {
+      "id": "bulk-billing-choice-zh",
+      "question": "是不是每个全科医生每次看诊都可以全额报销？",
+      "expected_source_ids": [
+        "bulk-billing-zh"
+      ],
+      "required_evidence": "不是每位全科医生每次诊疗都提供全额报销，应提前确认。"
+    },
+    {
+      "id": "mental-health-card-en",
+      "question": "Can I access Medicare Mental Health services without a Medicare card?",
+      "expected_source_ids": [
+        "mental-health-navigation-en"
+      ],
+      "required_evidence": "Services can be accessed with or without a Medicare card."
+    },
+    {
+      "id": "mental-health-interpreter-en",
+      "question": "How can I contact Medicare Mental Health if I do not speak English?",
+      "expected_source_ids": [
+        "mental-health-navigation-en"
+      ],
+      "required_evidence": "Use TIS National to connect to the Medicare Mental Health phone service."
+    },
+    {
+      "id": "mental-health-card-zh",
+      "question": "没有Medicare卡，可以使用Medicare精神卫生服务吗？",
+      "expected_source_ids": [
+        "mental-health-navigation-zh"
+      ],
+      "required_evidence": "无论是否持有Medicare卡，都可以获得服务。"
+    },
+    {
+      "id": "urgent-care-boundary-en",
+      "question": "What is the difference between urgent care and emergency care?",
+      "expected_source_ids": [
+        "urgent-care-selection-en"
+      ],
+      "required_evidence": "Urgent care concerns problems that cannot wait but are not life-threatening; emergency care concerns life-threatening problems."
+    },
+    {
+      "id": "urgent-care-boundary-zh",
+      "question": "紧急护理诊所和医院急诊有什么区别？",
+      "expected_source_ids": [
+        "urgent-care-selection-zh"
+      ],
+      "required_evidence": "区分不能等待但无生命危险的伤病与危及生命的急救情况。"
+    }
+  ]
+}

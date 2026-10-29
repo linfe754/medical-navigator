@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "source_id": "medicare-overview-en-zh",
+      "filename": "15560-2507zh.pdf",
+      "title": "Medicare is Australia's health care system — English and Simplified Chinese",
+      "source_url": "https://www.servicesaustralia.gov.au/sites/default/files/2025-11/15560-2507zh.pdf",
+      "languages": ["en", "zh-Hans"],
+      "topic": "medicare",
+      "resource_family": "medicare-overview",
+      "jurisdiction": "AU",
+      "prepare": true,
+      "approved_for_embedding": false
+    },
+    {
+      "source_id": "bulk-billing-en",
+      "filename": "medicare-s-got-the-bill-bulk-billing-for-all-australians-fact-sheet.pdf",
+      "title": "Bulk billing for all Australians — English",
+      "source_url": "https://www.health.gov.au/sites/default/files/2026-01/medicare-s-got-the-bill-bulk-billing-for-all-australians-fact-sheet.pdf",
+      "languages": ["en"],
+      "topic": "bulk-billing",
+      "resource_family": "bulk-billing",
+      "jurisdiction": "AU",
+      "prepare": true,
+      "approved_for_embedding": false
+    },
+    {
+      "source_id": "bulk-billing-zh",
+      "filename": "medicare-s-got-the-bill-bulk-billing-for-all-australians-fact-sheet_0_zh.pdf",
+      "title": "Bulk billing for all Australians — Simplified Chinese",
+      "source_url": "https://www.health.gov.au/sites/default/files/2026-02/medicare-s-got-the-bill-bulk-billing-for-all-australians-fact-sheet_0.pdf",
+      "languages": ["zh-Hans"],
+      "topic": "bulk-billing",
+      "resource_family": "bulk-billing",
+      "jurisdiction": "AU",
+      "prepare": true,
+      "approved_for_embedding": false
+    },
+    {
+      "source_id": "bulk-billing-easy-read-en",
+      "filename": "what-is-bulk-billing-and-how-can-you-get-free-health-care.pdf",
+      "title": "What is bulk billing? How you can get free health care — Easy Read",
+      "source_url": "https://www.health.gov.au/sites/default/files/2026-04/what-is-bulk-billing-and-how-can-you-get-free-health-care.pdf",
+      "languages": ["en"],
+      "topic": "bulk-billing",
+      "resource_family": "bulk-billing-easy-read",
+      "jurisdiction": "AU",
+      "prepare": true,
+      "approved_for_embedding": false
+    },
+    {
+      "source_id": "pbs-costs-en",
+      "filename": "pbs-price-reduction-what-the-lower-co-payment-means-for-you-fact-sheet.pdf",
+      "title": "What the lower co-payment for PBS medicines means for you — English",
+      "source_url": "https://www.health.gov.au/sites/default/files/2026-01/pbs-price-reduction-what-the-lower-co-payment-means-for-you-fact-sheet.pdf",
+      "languages": ["en"],
+      "topic": "medicine-costs",
+      "resource_family": "pbs-costs",
+      "jurisdiction": "AU",
+      "prepare": true,
+      "approved_for_embedding": false
+    },
+    {
+      "source_id": "pbs-costs-zh",
+      "filename": "pbs-price-reduction-what-the-lower-co-payment-means-for-you-fact-sheet_7_zh.pdf",
+      "title": "What the lower co-payment for PBS medicines means for you — Simplified Chinese",
+      "source_url": "https://www.health.gov.au/sites/default/files/2026-02/pbs-price-reduction-what-the-lower-co-payment-means-for-you-fact-sheet_7.pdf",
+      "languages": ["zh-Hans"],
+      "topic": "medicine-costs",
+      "resource_family": "pbs-costs",
+      "jurisdiction": "AU",
+      "prepare": true,
+      "approved_for_embedding": false
+    },
+    {
+      "source_id": "urgent-care-selection-en",
+      "filename": "when-to-visit-a-medicare-urgent-care-clinic_0.pdf",
+      "title": "When to visit a Medicare Urgent Care Clinic — English",
+      "source_url": "https://www.health.gov.au/sites/default/files/2025-07/when-to-visit-a-medicare-urgent-care-clinic_0.pdf",
+      "languages": ["en"],
+      "topic": "healthcare-navigation",
+      "resource_family": "urgent-care-selection",
+      "jurisdiction": "AU",
+      "prepare": true,
+      "approved_for_embedding": false
+    },
+    {
+      "source_id": "urgent-care-selection-zh",
+      "filename": "when-to-visit-a-medicare-urgent-care-clinic_0 (zh).pdf",
+      "title": "When to visit a Medicare Urgent Care Clinic — Simplified Chinese",
+      "source_url": "https://www.health.gov.au/sites/default/files/2026-04/when-to-visit-a-medicare-urgent-care-clinic_0.pdf",
+      "languages": ["zh-Hans"],
+      "topic": "healthcare-navigation",
+      "resource_family": "urgent-care-selection",
+      "jurisdiction": "AU",
+      "prepare": true,
+      "approved_for_embedding": false
+    },
+    {
+      "source_id": "mental-health-navigation-en",
+      "filename": "medicare_mental_health_faqs.pdf",
+      "title": "Medicare Mental Health — Frequently asked questions — English",
+      "source_url": "https://www.medicarementalhealth.gov.au/sites/default/files/h2h/2025-08/medicare_mental_health_faqs.pdf",
+      "languages": ["en"],
+      "topic": "mental-health-navigation",
+      "resource_family": "mental-health-navigation",
+      "jurisdiction": "AU",
+      "prepare": true,
+      "approved_for_embedding": false,
+      "review_notes": [
+        "Check Kids Hub appointment wording against current service guidance."
+      ]
+    },
+    {
+      "source_id": "mental-health-navigation-zh",
+      "filename": "medicare_mental_health_faq_chs.pdf",
+      "title": "Medicare Mental Health — Frequently asked questions — Simplified Chinese",
+      "source_url": "https://www.medicarementalhealth.gov.au/sites/default/files/h2h/2025-07/medicare_mental_health_faq_chs.pdf",
+      "languages": ["zh-Hans"],
+      "topic": "mental-health-navigation",
+      "resource_family": "mental-health-navigation",
+      "jurisdiction": "AU",
+      "prepare": true,
+      "approved_for_embedding": false,
+      "review_notes": [
+        "Check Kids Hub appointment wording against current service guidance."
+      ]
+    }
+  ]
+}
