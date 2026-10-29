@@ -10,3 +10,13 @@ wheels/
 .venv
 .env
 evals/reports/*.json
+
+# Original documents and generated ingestion outputs
+/data/raw/
+/data/extracted/
+/data/cleaned/
+/data/reports/
+
+/data/chunks/
+
+/data/experiments/

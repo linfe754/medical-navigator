@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "rubric_id": "navigation_answers_v1",
+  "allowed_ratings": ["pass", "fail", "uncertain"],
+  "criteria": [
+    {
+      "id": "evidence_completeness",
+      "question": "Does the answer include the evidence needed to answer the question?",
+      "fail_when": "A necessary explanation, condition, or qualification is missing."
+    },
+    {
+      "id": "grounding",
+      "question": "Are factual claims supported by the supplied context?",
+      "fail_when": "The answer invents facts or strengthens a claim beyond the evidence."
+    },
+    {
+      "id": "citation_support",
+      "question": "Do the cited source blocks support the associated claims?",
+      "fail_when": "A citation label is invalid, points to unrelated evidence, or a material factual claim lacks support."
+    },
+    {
+      "id": "relevance",
+      "question": "Does the answer stay focused on the requested information?",
+      "fail_when": "It adds unrelated topics, unnecessary checklists, or substantial unrequested detail."
+    },
+    {
+      "id": "navigation_boundary",
+      "question": "Does the answer remain within healthcare navigation rather than clinical assessment?",
+      "fail_when": "It diagnoses, recommends treatment, assesses the user's symptoms, or introduces symptom lists contrary to the task instructions."
+    },
+    {
+      "id": "qualification_preservation",
+      "question": "Are important restrictions and exceptions preserved?",
+      "fail_when": "Conditional access, costs, eligibility, or service boundaries become unconditional claims."
+    },
+    {
+      "id": "language_and_clarity",
+      "question": "Is the response clear, concise, and in the user's language?",
+      "fail_when": "The language is wrong or the presentation unnecessarily obscures the answer."
+    },
+    {
+      "id": "insufficient_evidence",
+      "question": "When evidence is insufficient, does the answer acknowledge the gap?",
+      "fail_when": "The answer fills an evidence gap with an unsupported conclusion."
+    }
+  ],
+  "review_policy": {
+    "all_criteria_required_for_pass": true,
+    "uncertain_requires_review": true,
+    "citation_syntax_alone_is_not_support": true,
+    "judge_against_question_context_and_instructions": true,
+    "automated_judgements_require_human_calibration": true
+  }
+}
