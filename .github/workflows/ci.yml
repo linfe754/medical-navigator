@@ -34,7 +34,7 @@ jobs:
         run: docker build -t medical-navigator:ci .
 
       - name: Login to Azure
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: false
         uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
@@ -42,15 +42,15 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Verify Azure login
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: false
         run: az account show --output table
 
       - name: Login to ACR
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: false
         run: az acr login --name medicalnavigator754
 
       - name: Build and push Docker image
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: false
         run: |
           docker build \
             -t medicalnavigator754.azurecr.io/medical-navigator:${{ github.sha }} \
@@ -59,7 +59,7 @@ jobs:
             medicalnavigator754.azurecr.io/medical-navigator:${{ github.sha }}
 
       - name: Deploy to Azure Container Apps
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: false
         run: |
           az containerapp update \
             --name medical-navigator \

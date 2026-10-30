@@ -12,6 +12,7 @@ dependencies = [
     "openai>=3.11.0",
     "pypdf>=6.21.2",
     "python-dotenv>=1.2.3",
+    "rank-bm25>=0.2.2",
     "redis>=8.1.0",
     "uvicorn[standard]>=0.52.4",
 ]
