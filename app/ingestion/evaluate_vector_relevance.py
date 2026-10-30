@@ -4,7 +4,7 @@
 import csv
 from pathlib import Path
 
-from app.services.rag_vector_retriever import get_vector_retriever
+from app.services.rag_milvus_retriever import get_vector_retriever
 
 
 TEST_CASES = [
@@ -20,16 +20,16 @@ TEST_CASES = [
     ("in_scope", "How much do PBS medicines cost?"),
     ("in_scope", "What are Medicare Mental Health Centres?"),
     ("in_scope", "如何寻找免费的心理健康支持服务？"),
+    ("in_scope", "How do I apply for a Medicare card?"),
+    ("in_scope", "如何申请 Medicare 卡？"),
 
     # Healthcare navigation questions outside current document coverage
-    ("out_of_scope", "How do I apply for a Medicare card?"),
     ("out_of_scope", "How can I book a dentist appointment?"),
     ("out_of_scope", "How much does an ambulance cost in Victoria?"),
     ("out_of_scope", "Where can I park at the Royal Children's Hospital?"),
     ("out_of_scope", "How do I get a specialist referral?"),
     ("out_of_scope", "How do I find a Chinese-speaking physiotherapist?"),
     ("out_of_scope", "How long is the waiting list for public surgery?"),
-    ("out_of_scope", "如何申请 Medicare 卡？"),
     ("out_of_scope", "我怎样预约牙医？"),
     ("out_of_scope", "How do I renew my driver's licence?"),
 ]
