@@ -6,7 +6,7 @@ Find Healthcare (Medical Navigator) is a public prototype exploring how a constr
 | --- | --- |
 | **Live** | [findhealthcare.au](https://findhealthcare.au) |
 | **Purpose** | Reduce barriers to navigating Australian healthcare services |
-| **Built with** | FastAPI · OpenAI · Google Maps Platform · Docker · Azure |
+| **Built with** | FastAPI · OpenAI · BM25 · Milvus Lite · Google Maps Platform · Docker · Azure Container Apps |
 | **Status** | Public prototype |
 
 ![Find Healthcare desktop interface](docs/images/find-healthcare-desktop.png)
@@ -32,7 +32,7 @@ Users can ask questions such as “How do I get a Medicare card?”, “Do I nee
 - Resolve a named facility with Google Places, show nearby tram, bus and train access with estimated walking distance, and request a Google Routes transit journey when an origin is supplied. Ambiguous facility names prompt a choice.
 - Respond to English and Chinese input in the model-led navigation path. Rule-based responses and the interface are primarily in English, so language coverage is partial.
 
-General navigation answers can stream into the chat as they are generated. Fixed responses, the Healthdirect guide and transport results return as complete JSON responses. Model-led streaming follow-ups with existing context are currently unsupported; the streaming generator is only defined and returned for requests without context.
+General navigation answers can stream into the chat as they are generated. Fixed responses, the Healthdirect guide and transport results return as complete JSON responses. Both navigation endpoints share retrieval and prompt assembly, including available conversation context. The streaming endpoint returns plain text deltas; source metadata and `rag_used` are exposed by the complete `/chat` response, not appended to the text stream.
 
 The browser uses a session ID for follow-up questions. The server keeps the current topic, selected facility and up to six recent turns per session in process memory.
 
@@ -50,7 +50,7 @@ The application checks for a pending facility choice, then routes other messages
 
 The model instruction also prohibits clinical triage, symptom-based service recommendations and invented transport directions. These controls reduce inappropriate responses but are pattern- and model-dependent; they are not a clinical safety guarantee. Users should verify important service and travel details with the relevant provider.
 
-## Architecture
+## Architecture — v4 production
 
 ```mermaid
 flowchart LR
@@ -62,13 +62,27 @@ flowchart LR
     C --> R
     R --> T[Application selected transport path]
     T --> P[Google Places and Routes APIs]
-    R --> M[gpt-5-mini navigation response]
+    R --> Q[Hybrid BM25 and Milvus Lite retrieval]
+    Q --> G[Relevance gate and validated parent-page context]
+    G --> M[gpt-5-mini grounded navigation response]
+    G --> B[Fixed fallback when no evidence]
+    D[Official PDF corpus in Docker] --> Q
     A <--> S[In-memory session context]
 ```
 
-The application, rather than the model, selects the service finder and transport paths. For transport requests, `gpt-5-nano` extracts an origin and destination; Python code then calls Google Places and Routes and formats the result. General navigation answers use `gpt-5-mini` through the OpenAI Responses API with a navigation-specific instruction and recent topic context.
+The application, rather than the model, selects the service finder and transport paths. For transport requests, `gpt-5-nano` extracts an origin and destination; Python code then calls Google Places and Routes and formats the result. General navigation answers use `gpt-5-mini` through the OpenAI Responses API with navigation-specific instructions, retrieved evidence and recent topic context.
 
 There is deliberately no autonomous agent loop or model-directed function calling in the current implementation. The system uses deterministic orchestration where the required action can be identified reliably, reserving model reasoning for tasks where natural-language interpretation adds value. This makes behaviour easier to test and is intended to reduce unnecessary model/API usage and response latency; production savings and latency improvements have not been benchmarked.
+
+### Grounded navigation and source corpus
+
+The v4 production deployment uses hybrid lexical BM25 and embedded Milvus Lite vector retrieval. Query embeddings use `text-embedding-3-small` (1,536 dimensions) and cosine similarity. Each retriever returns up to five candidates; vector similarity must be at least 0.50 before reciprocal rank fusion (RRF, k=60) ranks at most two canonical child chunks. Matching cleaned parent pages supply context, capped at 12,000 characters, after parent identity, child text and content-hash validation.
+
+Production Medicare validation used the official Services Australia PDF [Medicare is Australia's health care system — English and Simplified Chinese](https://www.servicesaustralia.gov.au/sites/default/files/2025-11/15560-2507zh.pdf). Responses from `/chat` include application-built source references with title, official URL, page number, source/parent identifiers and content hash. English and Chinese navigation have been exercised against this bilingual corpus. The [source manifest](data/sources.json) also lists other government PDFs for preparation and review; a manifest entry alone does not establish that a document is in the deployed index.
+
+Retrieval defaults to `RAG_RETRIEVER=hybrid`; `bm25` is an explicit alternative configuration. Hybrid mode fails closed when no candidate passes the relevance gate or a handled Milvus connection/operational failure occurs: it does not silently switch to BM25. With no retrieved context, both endpoints return a fixed authoritative-service fallback, `sources: []` and `rag_used: false`, without calling the navigation answer model. Other errors, including integrity-validation errors, propagate rather than generating an ungrounded answer. When evidence is available, model instructions require supported facts only and treat documents as untrusted evidence; this instruction is not an automated guarantee of factual correctness.
+
+Safety routing precedes retrieval and answer generation. Recognised emergency, clinical and unrelated requests retain fixed application responses; unmatched intent classification can still use the small classifier model.
 
 ## Technology stack
 
@@ -83,13 +97,15 @@ flowchart LR
     A --> C[findhealthcare.au custom domain]
 ```
 
-The repository's `Dockerfile` builds a Python 3.12 image, installs locked production dependencies with `uv`, copies the app and starts Uvicorn on port 8000. `GET /` serves the page, `POST /chat` handles complete responses, `POST /chat/stream` streams general navigation answers with JSON fallback for dedicated paths, and `GET /health` reports application availability without checking external API dependencies. The [deployment summary](docs/deployment.md) records the production architecture without infrastructure identifiers or secrets.
+The repository's `Dockerfile` builds a Python 3.12 image, installs locked production dependencies with `uv`, copies the app, cleaned pages, child chunks, source manifest and prebuilt `data/vector/milvus.db`, then starts Uvicorn on port 8000. `GET /` serves the page, `POST /chat` handles complete responses, `POST /chat/stream` streams general navigation answers with JSON fallback for dedicated paths, and `GET /health` reports application availability without checking external API dependencies. The [deployment summary](docs/deployment.md) records the production architecture without infrastructure identifiers or secrets.
+
+The Milvus Lite database runs inside the application container; there is no separate Milvus server in this deployment. Build the image from a prepared workspace containing the reviewed corpus artifacts. These generated data directories are ignored by Git and are not supplied by a fresh clone. Publish the prepared image to Azure Container Registry (ACR), then update Azure Container Apps to use that image. Corpus/index changes require a new prepared image and deployment.
 
 ### CI/CD
 
 [GitHub Actions](.github/workflows/ci.yml) runs on pushes and pull requests targeting `main`. It installs Python 3.12 and locked dependencies with `uv`, runs the default test suite and validates the Docker build.
 
-After those checks pass on a push to `main`, the same workflow authenticates to Azure through OIDC, pushes a Docker image tagged with the commit SHA to Azure Container Registry, and updates Azure Container Apps. Pull requests run validation only. Azure authentication uses federated identity rather than a stored client secret; the workflow reads the client, tenant and subscription IDs from GitHub repository variables.
+The workflow contains Azure OIDC login, ACR push and Container Apps update steps, but these currently have `if: false` and do not run automatically. The v4 production image was deployed through ACR to Azure Container Apps. The Docker validation step also needs the ignored corpus artifacts in its build context; the checked-in workflow does not currently prepare or download them. A clean checkout therefore lacks files required by the current Dockerfile.
 
 ## Observability
 
@@ -119,6 +135,8 @@ Install [uv](https://docs.astral.sh/uv/) and use Python 3.11 or newer. Configure
 OPENAI_API_KEY=your_openai_api_key
 GOOGLE_MAPS_API_KEY=your_google_maps_api_key
 ```
+
+RAG also requires prepared `data/chunks/`, `data/cleaned/` and `data/vector/milvus.db` artifacts compatible with the source manifest. These are not included in a fresh clone; use the ingestion utilities in `app/ingestion/` to prepare and review the corpus, generate chunks and build the Milvus index before exercising navigation retrieval or building Docker. The default backend is hybrid; setting `RAG_RETRIEVER=bm25` explicitly selects lexical-only retrieval and still requires the chunk and cleaned-page artifacts.
 
 The Google key needs access to the Places and Routes APIs for transport features. Then run:
 
@@ -175,6 +193,29 @@ Both evaluators exercise the application response path and can invoke OpenAI and
 
 The safety evaluator checks required and forbidden text plus patterns for clinical follow-up questions. It does not semantically assess every prohibited behaviour listed in the case schema or establish clinical safety. The product evaluator adds a basic language check and returns `PASS`, `FAIL` or `REVIEW`; GP-first and clarification cases without automated violations require manual review. An automated `PASS` means only that the implemented checks passed, not that the response is fully correct or the user task succeeded. Formal end-to-end task-success measurement is not yet implemented.
 
+### Reported v4 production validation
+
+The following results were reported in the production rollout conversation; they are a recorded smoke-test baseline, not a new test run or a reliability guarantee.
+
+| Check | Reported result |
+| --- | --- |
+| Docker with embedded Milvus Lite; Azure deployment | Passed |
+| English and Chinese Medicare retrieval | Passed; official Services Australia references returned |
+| Streaming endpoint | Response received; incremental delivery and time to first text were not measured |
+| Emergency, medication-advice and unrelated requests | Fixed emergency response, clinical refusal and scope response returned |
+
+Five complete `/chat` requests established this end-to-end baseline, including client/network time, retrieval and answer generation:
+
+| Query | Seconds | RAG used | Sources |
+| --- | ---: | --- | ---: |
+| How do I enrol in Medicare? | 11.89 | true | 1 |
+| How do I apply for a Medicare card? | 12.55 | true | 1 |
+| What is Medicare Safety Nets? | 13.81 | true | 2 |
+| 如何申请 Medicare 卡？ | 10.73 | true | 2 |
+| Medicare 可以报销哪些医疗费用？ | 9.13 | true | 1 |
+
+Mean latency was approximately **11.62 seconds**, with a **9.13–13.81 second** range; all five returned `rag_used: true` and one or two sources. This small sample does not establish answer accuracy, sustained reliability, concurrent-load performance or latency percentiles. Embedding, retrieval and generation timings were not separated in this measurement.
+
 ## Project structure
 
 ```text
@@ -183,9 +224,19 @@ app/
   router.py
   memory.py
   observability/telemetry.py
+  ingestion/
+  services/rag_service.py
+  services/rag_retriever.py
+  services/rag_hybrid_retriever.py
+  services/rag_milvus_retriever.py
   services/transport_service.py
   tools/transport.py
   static/
+data/sources.json
+# Generated corpus artifacts (ignored by Git):
+data/chunks/
+data/cleaned/
+data/vector/milvus.db
 evals/
   datasets/routing.jsonl
   datasets/safety.jsonl
@@ -218,7 +269,7 @@ Find Healthcare does not use generative AI for every request. A core design prin
 
 This is a prototype with partial Chinese coverage, in-process session memory and no live departure times. Intent rules cannot recognise every phrasing, and external API errors do not always produce a friendly response. The application has no rate limiting yet.
 
-Structured telemetry, routing, response-safety and product-contract evaluators, initial streaming responses and automated deployment are now implemented. Remaining work includes fixing and testing streaming follow-ups with existing context, expanding semantic response-safety evaluation and tool-behaviour checks, adding transport tool tests, improving telemetry coverage and cost reporting, persistent session management, and authoritative healthcare-navigation RAG. More agentic orchestration, including ReAct or graph-based workflows, will be introduced only where it provides a measurable advantage over the current deterministic routing architecture.
+Structured telemetry, routing, response-safety and product-contract evaluators, context-aware streaming and authoritative healthcare-navigation RAG are implemented. The v4 hybrid RAG image has been deployed to Azure Container Apps through ACR; automated deployment steps are currently disabled. Remaining work includes broader bilingual grounding and eligibility review, verifying incremental streaming and follow-up behaviour end to end, restoring a reproducible corpus-aware CI build and deployment pipeline, expanding semantic response-safety evaluation and tool-behaviour checks, adding transport tool tests, improving telemetry coverage and cost reporting, persistent session management, and latency optimisation. More agentic orchestration, including ReAct or graph-based workflows, will be introduced only where it provides a measurable advantage over the current deterministic routing architecture.
 
 ## AI assistance
 
