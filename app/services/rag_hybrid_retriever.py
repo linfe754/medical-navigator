@@ -1,8 +1,8 @@
 
-"""Hybrid BM25 + Redis vector retrieval using RRF."""
+"""Hybrid BM25 + Milvus Lite vector retrieval using RRF."""
 
 from app.services.rag_retriever import get_rag_retriever
-from app.services.rag_vector_retriever import get_vector_retriever
+from app.services.rag_milvus_retriever import get_vector_retriever
 
 
 BM25_TOP_K = 5

@@ -212,7 +212,11 @@ Safety:
 - Follow the existing system instructions and safety boundaries.
 """
 
-
+RAG_FALLBACK_MESSAGE = (
+    "I couldn't find reliable reference information to answer that question. "
+    "You can check the official Healthdirect website for Australian healthcare "
+    "services or contact Services Australia for Medicare-related enquiries."
+)
 
 def prepare_navigation_input(
     message: str,
@@ -481,6 +485,12 @@ def chat(request: ChatRequest):
         message=request.message,
         conversation_context=context,
     )
+    if not rag["rag_used"]:
+        return {
+            "response": RAG_FALLBACK_MESSAGE,
+            "sources": [],
+            "rag_used": False,
+        }
     model_input = rag["model_input"]
 
     llm_start = time.perf_counter()
@@ -559,6 +569,12 @@ def chat_stream(request: ChatRequest):
         message=request.message,
         conversation_context=context,
     )
+    if not rag["rag_used"]:
+        return {
+            "response": RAG_FALLBACK_MESSAGE,
+            "sources": [],
+            "rag_used": False,
+        }
     model_input = rag["model_input"]
 
     def generate():

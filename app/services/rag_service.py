@@ -8,9 +8,9 @@ for the LLM.
 
 Supported retrieval backends:
 - bm25: local BM25 retrieval
-- hybrid: BM25 + Redis vector retrieval using RRF
+- hybrid: BM25 + Milvus Lite vector retrieval using RRF
 
-When Redis is unavailable in hybrid mode, retrieval falls back to BM25.
+When Milvus is unavailable in hybrid mode, retrieval returns no chunks.
 """
 
 import hashlib
@@ -20,10 +20,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from redis.exceptions import (
-    ConnectionError as RedisConnectionError,
-    TimeoutError as RedisTimeoutError,
-)
+from pymilvus.exceptions import MilvusException
 
 from app.ingestion.context_builder import build_context
 from app.services.rag_retriever import get_rag_retriever
@@ -144,13 +141,13 @@ def retrieve_chunks(
     Retrieve candidate chunks using the configured backend.
 
     Hybrid mode:
-        BM25 + Redis vector retrieval with RRF.
+        BM25 + Milvus Lite vector retrieval using RRF.
 
     BM25 mode:
-        Local lexical retrieval without Redis.
+        Local lexical retrieval without vector search.
 
-    Redis connection or timeout failures in hybrid mode trigger
-    a BM25 fallback. Other exceptions are propagated.
+    Milvus connection or operational failures in hybrid mode
+    return no chunks. Other exceptions are propagated.
     """
     if top_k < 1:
         raise ValueError("top_k must be positive")
@@ -176,9 +173,9 @@ def retrieve_chunks(
             top_k=top_k,
         )
 
-    except (RedisConnectionError, RedisTimeoutError):
+    except (MilvusException, ConnectionError, TimeoutError, OSError):
         logger.warning(
-            "Redis unavailable. Skipping RAG context retrieval.",
+            "Milvus unavailable. Skipping RAG context retrieval.",
             exc_info=True,
         )
         return []

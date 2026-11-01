@@ -1,5 +1,5 @@
 
-"""Evaluate Redis vector similarity for RAG relevance gating."""
+"""Evaluate Milvus Lite vector similarity for RAG relevance gating."""
 
 import csv
 from pathlib import Path

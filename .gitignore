@@ -18,5 +18,5 @@ evals/reports/*.json
 /data/reports/
 
 /data/chunks/
-
+/data/vector/
 /data/experiments/
