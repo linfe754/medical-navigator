@@ -2,3 +2,9 @@
 .git
 __pycache__
 *.pyc
+
+data/vector/milvus-empty/
+data/vector/milvus-original/
+data/reviews.json
+data/reports/
+data/experiments/

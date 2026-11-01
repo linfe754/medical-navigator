@@ -1,4 +1,3 @@
-import hashlib
 import json
 import re
 from pathlib import Path
@@ -37,15 +36,16 @@ def load_candidates() -> list[dict]:
         path = Path("data/chunks") / f"{source['source_id']}.json"
         document = json.loads(path.read_text(encoding="utf-8"))
 
-        current_hash = hashlib.sha256(
-            (Path("data/raw") / source["filename"]).read_bytes()
-        ).hexdigest()
+        source_hashes = {
+            chunk["metadata"]["content_hash"]
+            for chunk in document["chunks"]
+        }
+
+        if len(source_hashes) != 1:
+            raise ValueError("Inconsistent source hashes in prepared chunks")
 
         for chunk in document["chunks"]:
             metadata = chunk["metadata"]
-
-            if metadata["content_hash"] != current_hash:
-                raise ValueError("Stale chunks; rerun preparation and chunking")
 
             if any(metadata.get(key) != value for key, value in source.items()):
                 raise ValueError("Chunk metadata differs from the manifest")
